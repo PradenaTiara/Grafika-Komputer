@@ -1,0 +1,159 @@
+#include <GL/freeglut.h>        // Header library untuk OpenGL & GLUT
+#include <iostream>             // Library input-output C++
+#include <vector>               // Library vector (array dinamis)
+#include <algorithm>            // Untuk fungsi std::min dan std::max
+
+// Struktur data untuk menyimpan koordinat titik
+struct Point {
+    float x, y;                 // x dan y adalah posisi titik
+};
+
+// Struktur data garis: terdiri dari dua titik
+struct Line {
+    Point p1, p2;               // Titik awal dan akhir dari garis
+};
+
+std::vector<Line> allLines;            // Menyimpan semua garis huruf
+std::vector<Point> intersections;      // Menyimpan semua titik perpotongan
+
+// Fungsi untuk mencari perpotongan antara dua garis
+bool findIntersection(Point p1, Point p2, Point p3, Point p4, Point& intersection) {
+    float a1 = p2.y - p1.y;             // Gradien garis 1 (dy)
+    float b1 = p1.x - p2.x;             // Negatif dx
+    float c1 = a1 * p1.x + b1 * p1.y;   // Konstanta c1
+
+    float a2 = p4.y - p3.y;             // Gradien garis 2
+    float b2 = p3.x - p4.x;
+    float c2 = a2 * p3.x + b2 * p3.y;
+
+    float det = a1 * b2 - a2 * b1;      // Determinan (untuk cek paralel)
+
+    if (det == 0) return false;         // Jika nol, maka garis sejajar atau berhimpit
+
+    // Hitung titik potong (x, y)
+    intersection.x = (b2 * c1 - b1 * c2) / det;
+    intersection.y = (a1 * c2 - a2 * c1) / det;
+
+    // Validasi Memstikan titik berada di dalam segmen garis, bukan perpanjangannya
+    if (
+        intersection.x < std::min(p1.x, p2.x) - 0.01 || intersection.x > std::max(p1.x, p2.x) + 0.01 ||
+        intersection.x < std::min(p3.x, p4.x) - 0.01 || intersection.x > std::max(p3.x, p4.x) + 0.01 ||
+        intersection.y < std::min(p1.y, p2.y) - 0.01 || intersection.y > std::max(p1.y, p2.y) + 0.01 ||
+        intersection.y < std::min(p3.y, p4.y) - 0.01 || intersection.y > std::max(p3.y, p4.y) + 0.01
+    )
+        return false;
+
+    return true; // Titik valid
+}
+
+// Fungsi menggambar satu garis dari dua titik
+void drawLine(Point p1, Point p2) {
+    glBegin(GL_LINES);         // Mulai menggambar garis
+    glVertex2f(p1.x, p1.y);    // Titik awal
+    glVertex2f(p2.x, p2.y);    // Titik akhir
+    glEnd();                   // Selesai menggambar
+}
+
+// Fungsi menggambar titik perpotongan
+void drawIntersection(Point p) {
+    glPointSize(6.0);          // Ukuran titik
+    glBegin(GL_POINTS);        // Mulai menggambar titik
+    glVertex2f(p.x, p.y);      // Titik yang digambar
+    glEnd();                   // Selesai
+}
+
+// Tambahkan huruf P ke dalam garis-garis
+void addHurufP(float offsetX, float offsetY) {
+    // Garis vertikal kiri huruf P
+    allLines.push_back({{offsetX, offsetY + 3}, {offsetX, offsetY}});
+    // Garis horizontal atas
+    allLines.push_back({{offsetX, offsetY + 3}, {offsetX + 1, offsetY + 3}});
+    // Garis kanan atas
+    allLines.push_back({{offsetX + 1, offsetY + 3}, {offsetX + 1, offsetY + 1.5}});
+    // Garis horizontal tengah
+    allLines.push_back({{offsetX + 1, offsetY + 1.5}, {offsetX, offsetY + 1.5}});
+}
+
+// Tambahkan huruf T
+void addHurufT(float offsetX, float offsetY) {
+    // Garis horizontal atas
+    allLines.push_back({{offsetX, offsetY + 3}, {offsetX + 2, offsetY + 3}});
+    // Garis vertikal tengah
+    allLines.push_back({{offsetX + 1, offsetY + 3}, {offsetX + 1, offsetY}});
+}
+
+// Tambahkan huruf M
+void addHurufM(float offsetX, float offsetY) {
+    // Garis kiri
+    allLines.push_back({{offsetX, offsetY}, {offsetX, offsetY + 3}});
+    // Diagonal dari kiri atas ke tengah
+    allLines.push_back({{offsetX, offsetY + 3}, {offsetX + 1, offsetY + 1.5}});
+    // Diagonal dari tengah ke kanan atas
+    allLines.push_back({{offsetX + 1, offsetY + 1.5}, {offsetX + 2, offsetY + 3}});
+    // Garis kanan
+    allLines.push_back({{offsetX + 2, offsetY + 3}, {offsetX + 2, offsetY}});
+}
+
+// Tambahkan huruf R
+void addHurufR(float offsetX, float offsetY) {
+    // Vertikal kiri
+    allLines.push_back({{offsetX, offsetY}, {offsetX, offsetY + 3}});
+    // Horizontal atas
+    allLines.push_back({{offsetX, offsetY + 3}, {offsetX + 1, offsetY + 3}});
+    // Garis kanan atas
+    allLines.push_back({{offsetX + 1, offsetY + 3}, {offsetX + 1, offsetY + 1.5}});
+    // Garis horizontal tengah
+    allLines.push_back({{offsetX + 1, offsetY + 1.5}, {offsetX, offsetY + 1.5}});
+    // Diagonal ke bawah kanan
+    allLines.push_back({{offsetX, offsetY + 1.5}, {offsetX + 1.2, offsetY}});
+}
+
+// Cek semua kombinasi garis, dan cari perpotongannya
+void computeIntersections() {
+    for (size_t i = 0; i < allLines.size(); ++i) {
+        for (size_t j = i + 1; j < allLines.size(); ++j) {
+            Point inter;
+            if (findIntersection(allLines[i].p1, allLines[i].p2, allLines[j].p1, allLines[j].p2, inter)) {
+                intersections.push_back(inter); // Simpan titik potong
+            }
+        }
+    }
+}
+
+// Fungsi untuk menggambar ke layar
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT);     // Bersihkan layar
+    glColor3f(1, 1, 1);               // Warna garis putih
+
+    for (auto line : allLines)
+        drawLine(line.p1, line.p2);  // Gambar semua garis
+
+    glColor3f(1, 0, 0);               // Warna titik merah
+    for (auto p : intersections)
+        drawIntersection(p);         // Gambar semua titik perpotongan
+
+    glutSwapBuffers();               // Tukar buffer (double buffering)
+}
+
+// Fungsi utama
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);                               // Inisialisasi GLUT
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);         // Gunakan double buffering dan warna RGB
+    glutInitWindowSize(800, 600);                        // Ukuran jendela
+    glutCreateWindow("Tugas3_672022028");  // Judul window
+    gluOrtho2D(0.0, 20.0, 0.0, 10.0);                     // Area kerja 20x10 (kiri-kanan, bawah-atas)
+
+    float startX = 3.5;                                   // Awal posisi huruf P di sumbu x
+    float offsetY = 3.5;                                  // Tinggi dasar huruf agar terlihat tengah
+
+    addHurufP(startX, offsetY);                           // Tambah huruf P
+    addHurufT(startX + 3.5, offsetY);                     // Tambah huruf T dengan jarak 3.5
+    addHurufM(startX + 7.0, offsetY);                     // Tambah huruf M
+    addHurufR(startX + 10.5, offsetY);                    // Tambah huruf R
+
+    computeIntersections();                              // Hitung titik potong antar garis
+
+    glutDisplayFunc(display);                            // Fungsi display dipanggil terus
+    glutMainLoop();                                      // Mulai loop utama OpenGL
+    return 0;                                            // Program selesai
+}
