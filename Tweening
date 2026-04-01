@@ -1,0 +1,179 @@
+#include <GL/glut.h>
+#define RATIO 1.200
+#define WW 100 //WINDOWS WIDTH
+#define WH (WW/RATIO) //WINDOWS HEIGHT
+#define HALFX ((int)(WW/2))
+#define HALFY ((int)(WH/2))
+#define deltat .0001
+
+int WindowWidth; //SEBAGAI VARIABEL MENAMPUNG NILAI WW
+int WindowHeight; //SEBAGAI VARIABEL MENAMPUNG NILAI WH
+
+
+void Init(){
+
+    /// Set mode matriks ke proyeksi dan reset matriks proyeksi
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+
+    /// Mengatur proyeksi ortografis 2D
+    gluOrtho2D(-HALFX, HALFX, -HALFY, HALFY);
+
+    /// Set mode matriks kembali ke model view
+    glMatrixMode(GL_MODELVIEW);
+
+    /// Set warna latar belakang menjadi hitam
+    glClearColor(0, 0, 0, 0);
+
+    /// Mengaktifkan state array vertex untuk rendering
+    glEnableClientState(GL_VERTEX_ARRAY);
+
+    /// Mengaktifkan state array warna untuk rendering
+    glEnableClientState(GL_COLOR_ARRAY);
+
+    /// Mengatur model shading menjadi GL_SMOOTH
+    glShadeModel(GL_SMOOTH);
+
+    /// Mengatur viewport untuk keseluruhan window
+    glViewport(0, 0, WindowWidth, WindowHeight);
+    /// Mengatur viewport sesuai dengan WindowHeight yang baru
+
+}
+
+
+void Display(){
+
+    /// Set lebar garis
+    glLineWidth(4.0);
+
+    /// Bentuk awal
+    float startShape[14][2] = {
+        {-3, 5}, {10, 5}, {10, 13},
+        {-3, 13},{-3, -22}, {-10, -22},
+        {-10, 20},{17, 20}, {17, -2},
+        {-3, -2}, {-3, 13}, {-3, 13},
+        {-3, 13},{-3, 13}
+    };///HURUF P
+
+    /// Bentuk akhir
+    float endShape[14][2] = {
+        {-3, 5}, {-10, 5}, {-10, 20},
+        {17, 20},{17, -2}, {-3, -15},
+        {17, -15}, {17, -22}, {-10, -22},
+        {-10, -12}, {10, 2}, {10, 13},
+        {-3, 13}, {-3, 5}
+    };///ANGKA 2
+
+    /// Bentuk antara
+    float intermediateShape[12][2];
+
+    /// Warna setiap titik
+    float vertexColor[28][3] = {
+        {1.0, 0.0, 0.0},   // Merah
+        {1.0, 0.5, 0.0},   // Oranye
+        {1.0, 1.0, 0.0},   // Kuning
+        {0.0, 1.0, 0.0},   // Hijau
+        {0.0, 1.0, 1.0},   // Cyan
+        {0.0, 0.5, 1.0},   // Biru langit
+        {0.6, 0.0, 1.0},   // Ungu terang
+        {1.0, 0.0, 1.0},   // Pink
+        {1.0, 0.0, 0.5},   // Magenta
+        {1.0, 0.3, 0.3},   // Merah muda
+        {0.8, 0.2, 0.8},   // Ungu cerah
+        {0.3, 0.6, 1.0},   // Biru langit
+        {0.4, 1.0, 0.4},   // Hijau terang
+        {1.0, 0.7, 0.2},   // Kuning-oranye
+        {1.0, 0.4, 0.6},   // Salmon
+        {0.6, 1.0, 0.6},   // Mint
+        {0.4, 0.8, 1.0},   // Baby blue
+        {1.0, 0.6, 0.0},   // Orange terang
+        {0.9, 0.0, 0.4},   // Fuchsia
+        {0.3, 1.0, 0.6},   // Aqua green
+        {0.7, 0.4, 1.0},   // Violet
+        {1.0, 0.9, 0.4},   // Kuning pucat
+        {0.8, 0.5, 0.0},   // Coklat muda
+        {0.7, 0.3, 0.3},   // Merah tua
+        {0.5, 0.7, 0.2},   // Olive
+        {0.9, 0.4, 0.9},   // Pink ungu
+        {0.2, 0.9, 0.6},   // Teal muda
+        {0.9, 0.3, 0.3}    // Merah terang
+    };
+
+    /// Tweening parameter
+    static float Tween = 0.0 - deltat;
+
+    /// Update tweening
+    if(Tween<1){
+        Tween += deltat;
+    }
+
+    /// Menghitung bentuk antara
+    for (int Vtx = 0; Vtx<28; Vtx++){
+        intermediateShape[Vtx][0] = (1.0 - Tween)*startShape[Vtx][0] + Tween*endShape[Vtx][0];
+        intermediateShape[Vtx][1] = (1.0 - Tween)*startShape[Vtx][1] + Tween*endShape[Vtx][1];
+    }
+
+    /// Mengatur pointer vertex
+    glVertexPointer(2, GL_FLOAT, 0, intermediateShape);
+
+    /// Mengatur pointer warna
+    glColorPointer(3, GL_FLOAT, 0, vertexColor);
+
+    /// Bersihkan layar
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    /// Menggambar array vertex sebagai loop garis
+    glDrawArrays(GL_LINE_LOOP, 0, 14);
+
+    /// Tukar buffer dan lakukan redisplay
+    glutSwapBuffers();
+    glutPostRedisplay();
+}
+
+void Reshape(int w, int h){
+    /// Atur ukuran jendela sesuai dengan proporsi RATIO
+    WindowWidth = w;
+    WindowHeight = (int)(w / RATIO);
+
+    /// Perbarui viewport
+    glViewport(0, 0, w, WindowHeight);
+
+    /// Inisialisasi ulang viewport
+    Init();
+}
+
+int main(int argc, char **argv){
+
+    /// Inisialisasi GLUT
+    glutInit(&argc, argv);
+
+    /// Tentukan mode tampilan GLUT
+    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
+
+    /// Menghitung lebar jendela
+    WindowWidth = (int)(glutGet((GLenum)GLUT_SCREEN_WIDTH) * 0.4);
+
+    /// Menghitung tinggi jendela
+    WindowHeight = (int)(WindowWidth / RATIO);
+
+    /// Inisialisasi ukuran jendela
+    glutInitWindowSize(WindowWidth, WindowHeight);
+
+    /// Menentukan posisi jendela
+    glutInitWindowPosition((int)(glutGet((GLenum)GLUT_SCREEN_WIDTH) * 0.1), (glutGet((GLenum)GLUT_SCREEN_HEIGHT) / 2) - (WindowHeight / 2));
+
+    /// Membuat jendela dengan judul "TWEENING"
+    glutCreateWindow("Pradena Tiara Maharani_Kombinasi Tweening");
+
+    /// Mendaftarkan fungsi Display sebagai fungsi display
+    glutDisplayFunc(Display);
+
+    /// Mendaftarkan fungsi Reshape sebagai fungsi reshape
+    glutReshapeFunc(Reshape);
+
+    /// Inisialisasi pengaturan OpenGL
+    Init();
+
+    /// Memulai event loop GLUT
+    glutMainLoop();
+}
