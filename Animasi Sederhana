@@ -1,0 +1,86 @@
+#include <GL/glut.h>
+#include <cmath>
+
+/*
+    Nama    : Pradena Tiara Maharani
+    NIM     : 672022028
+*/
+
+const int WIDTH = 800;
+const int HEIGHT = 600;
+
+float posX = 0.0f;
+float speedX = 4.0f;  // kecepatan linear sumbu X
+float t = 0.0f;       // parameter untuk Y pada pola infinity
+float speedT = 0.02f; // kecepatan update t
+
+const float SQUARE_SIZE = 20.0f;
+
+void drawSquare(float x, float y, float size) {
+    glBegin(GL_QUADS);
+        glVertex2f(x - size / 2, y - size / 2);
+        glVertex2f(x + size / 2, y - size / 2);
+        glVertex2f(x + size / 2, y + size / 2);
+        glVertex2f(x - size / 2, y + size / 2);
+    glEnd();
+}
+
+float getY(float t) {
+    float b = (HEIGHT - SQUARE_SIZE) / 2.0f;
+    return b * sin(2 * t);
+}
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT);
+    glColor3f(1, 0, 0);
+
+    float centerY = HEIGHT / 2.0f;
+
+    drawSquare(posX, centerY + getY(t), SQUARE_SIZE);
+
+    glutSwapBuffers();
+}
+
+void timer(int) {
+    // Update posisi X dengan kecepatan linear dan pantul di batas kiri-kanan
+    posX += speedX;
+    if (posX > WIDTH - SQUARE_SIZE / 2) {
+        posX = WIDTH - SQUARE_SIZE / 2;
+        speedX = -speedX;  // pantul ke kiri
+    }
+    else if (posX < SQUARE_SIZE / 2) {
+        posX = SQUARE_SIZE / 2;
+        speedX = -speedX;  // pantul ke kanan
+    }
+
+    // Update parameter t untuk posisi Y
+    t += speedT;
+    if (t > 2 * 3.14159f) t -= 2 * 3.14159f;
+
+    glutPostRedisplay();
+    glutTimerFunc(16, timer, 0);
+}
+
+void init() {
+    glClearColor(1,1,1,1);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluOrtho2D(0, WIDTH, 0, HEIGHT);
+}
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+    glutInitWindowSize(WIDTH, HEIGHT);
+    glutCreateWindow("Tugas3_672022028");
+
+    init();
+    glutDisplayFunc(display);
+    glutTimerFunc(0, timer, 0);
+
+    // Mulai dari posisi tengah di sumbu X
+    posX = WIDTH / 2.0f;
+
+    glutMainLoop();
+    return 0;
+}
