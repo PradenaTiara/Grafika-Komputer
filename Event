@@ -1,0 +1,154 @@
+#include <GL/glut.h>
+#include <iostream>
+#include <vector>
+
+/*
+    Nama    : Pradena Tiara Maharani
+    NIM     : 672022028
+*/
+
+using namespace std;
+std::vector<std::pair<float, float>> titikKoordinat; // Titik dari klik mouse
+
+int lebarWindow = 640, tinggiWindow = 480;
+int modeWarna = 2; //mulai dengan warna mode ke selain 1
+bool kerangkaObjek = false;
+
+// Mengatur warna objek berdasarkan index dan mode
+void aturWarna(int indeks) {
+    if (modeWarna == 1) {
+        if (indeks == 0) glColor3f(1.0f, 0.8f, 0.2f);     // kuning
+        else if (indeks == 1) glColor3f(0.4f, 0.7f, 1.0f); // biru
+        else if (indeks == 2) glColor3f(0.96f, 0.58f, 0.76f); // pink
+    } else {
+        glColor3f(1, 1, 1); // Putih
+    }
+}
+
+void gambarObjek() {
+    // Set mode wireframe jika kerangkaObjek true
+    glPolygonMode(GL_FRONT_AND_BACK, kerangkaObjek ? GL_LINE : GL_FILL);
+
+    // Persegi kiri
+    glPushMatrix();
+    glTranslatef(-172, 0, 0);
+    aturWarna(0);
+    glBegin(GL_QUADS);
+        glVertex2f(-60, -60);
+        glVertex2f(60, -60);
+        glVertex2f(60, 60);
+        glVertex2f(-60, 60);
+    glEnd();
+    glPopMatrix();
+
+    // Segitiga tengah
+    glPushMatrix();
+    aturWarna(1);
+    glBegin(GL_TRIANGLES);
+        glVertex2f(0, 60);
+        glVertex2f(-67.5, -60);
+        glVertex2f(67.5, -60);
+    glEnd();
+    glPopMatrix();
+
+    // Persegi kanan
+    glPushMatrix();
+    glTranslatef(172, 0, 0);
+    aturWarna(2);
+    glBegin(GL_QUADS);
+        glVertex2f(-60, -60);
+        glVertex2f(60, -60);
+        glVertex2f(60, 60);
+        glVertex2f(-60, 60);
+    glEnd();
+    glPopMatrix();
+
+    // Kembalikan mode ke default
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT); //Membersihkan buffer tampilan (warna) yang berisi gambar sebelumnya.
+    gambarObjek();
+    glColor3f(1, 1, 1); // warna titik
+    glPointSize(3.7);   // Ukuran titik
+    glBegin(GL_POINTS); //gambar titik
+    for (auto& letak : titikKoordinat) { //agar ada penanda putihnya
+        glVertex2f(letak.first, letak.second);
+    }
+    glEnd();
+
+    glutSwapBuffers();
+}
+
+void reshape(int l, int t) {
+    lebarWindow = l;
+    tinggiWindow = t;
+    glViewport(0, 0, l, t); //Mengatur area di dalam jendela yang digunakan untuk menggambar
+    glMatrixMode(GL_PROJECTION);// objek 3D diproyeksikan ke dalam 2D pada layar
+    glLoadIdentity();
+    gluOrtho2D(-l / 2, l / 2, -t / 2, t / 2); // mengubah koordinat 0.0 ke tengah layar
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+}
+
+// Keyboard: ubah warna & cetak ke CMD
+void keyboard(unsigned char key, int x, int y) {
+    //cout << "Tombol ditekan: '" << key << "' pada (" << x << ", " << y << ")" << endl; //cmd deteksi dengan koordinatnya
+     key = toupper(key); // ubah huruf kecil ke huruf kapital
+
+    cout << key << " di tekan" << endl; //cmd deteksi
+    switch (key) {
+        case 'A':
+            modeWarna = 1;
+            kerangkaObjek = false;
+            break;
+        case 'S':
+            modeWarna = 2;
+            kerangkaObjek = false;
+            break;
+        case 'D':
+            kerangkaObjek = true;
+            break;
+    }
+    glutPostRedisplay();
+}
+
+// Mouse click kiri. simpan titik & cetak ke CMD
+void mouseku(int tombolMouse, int keadaan, int x, int y) {
+    if (tombolMouse == GLUT_LEFT_BUTTON /*mouse kiri*/ && keadaan == GLUT_DOWN/*tombol ditekan*/) {
+        float koordinatX = x - lebarWindow / 2; // dibagi 2 karena koordinat (0.0) di ubah dari pojok kiri atas ke tengah
+        float koordinatY = tinggiWindow / 2 - y;
+        titikKoordinat.push_back({koordinatX, koordinatY});
+
+        //cout << "Klik mouse di: (" << koordinatX << ", " << koordinatY << ")" << endl; //cetak cmd dengan koordinatnya
+        cout << "Mouse kiri di klik" << endl; //cetak ke CMD hanya pemberitahuan klik
+
+        glutPostRedisplay();
+    }
+}
+
+// Pergerakan mouse (opsional)
+void pergerakanMouseku(int x, int y) {
+    // Bisa aktifkan kalau ingin lihat terus pergerakan mouse
+    //cout << "(" << x << ", " << y << ")" << endl;
+}
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitWindowSize(lebarWindow, tinggiWindow);
+    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
+    glutCreateWindow("Tugas 2 Grafika Komputer");
+
+    glClearColor(0, 0, 0, 0); //warna hitam
+
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
+    glutKeyboardFunc(keyboard);
+    glutMouseFunc(mouseku);
+    //glutPassiveMotionFunc(pergerakanMouseku);
+
+    glutMainLoop();
+    return 0;
+}
