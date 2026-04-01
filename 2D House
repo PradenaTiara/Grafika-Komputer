@@ -1,0 +1,1939 @@
+#include <windows.h>
+#include <GL/glut.h>
+#include <iostream>
+#include <vector>
+#include <cmath>
+
+enum Waktu { SORE, MALAM, PAGI, SIANG };
+Waktu waktuSaatIni = SORE;
+float transitionProgress = 0.0f;  // 0.0 to 1.0
+float lightingFactor = 1.0f;
+int timerInterval = 30; // ms
+
+
+struct Point {
+    float x, y;
+};
+
+std::vector<Point> clickPoints;
+
+void mulai() {
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluOrtho2D(-500.0, 500.0, -400.0, 400.0);
+}
+
+void lerpColor(float r1, float g1, float b1, float r2, float g2, float b2, float t, float& rOut, float& gOut, float& bOut) {
+    rOut = r1 + (r2 - r1) * t;
+    gOut = g1 + (g2 - g1) * t;
+    bOut = b1 + (b2 - b1) * t;
+}
+
+void updateWaktu(int value) {
+    transitionProgress += 0.005f;
+    if (transitionProgress >= 1.0f) {
+        transitionProgress = 0.0f;
+        waktuSaatIni = static_cast<Waktu>((waktuSaatIni + 1) % 4);
+    }
+
+    switch (waktuSaatIni) {
+        case SORE:
+            lightingFactor = 1.0f - 0.5f * transitionProgress;
+            break;
+        case MALAM:
+            lightingFactor = 0.5f + 0.3f * transitionProgress;
+            break;
+        case PAGI:
+            lightingFactor = 0.8f + 0.2f * transitionProgress;
+            break;
+        case SIANG:
+            lightingFactor = 1.0f;
+            break;
+    }
+
+    glutPostRedisplay();
+    glutTimerFunc(timerInterval, updateWaktu, 0);
+}
+
+
+void drawRectFence(float x1, float y1, float x2, float y2, int boxCount, float boxWidth, float boxHeight) {
+    float dx = (x2 - x1) / boxCount;
+    float dy = (y2 - y1) / boxCount;
+    float totalLength = sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)); // panjang pagar
+    for (int i = 0; i < boxCount; i++) {
+        float startX = x1 + i * dx;
+        float startY = y1 + i * dy;
+        // hitung posisi relatif terhadap panjang total (pakai i juga bisa, tapi ini lebih presisi)
+        float currentLength = sqrt((startX - x1) * (startX - x1) + (startY - y1) * (startY - y1));
+        float t = currentLength / totalLength; // dari 0.0 (kiri) ke 1.0 (kanan)
+        // gradasi warna coklat
+        float baseR = 0.4f + 0.2f * t; // dari 0.4 ke 0.6
+        float baseG = 0.2f + 0.1f * t; // dari 0.2 ke 0.3
+        float baseB = 0.05f + 0.05f * t; // dari 0.05 ke 0.1
+        glColor3f(baseR* lightingFactor, baseG* lightingFactor, baseB* lightingFactor);
+        glBegin(GL_QUADS);
+        glVertex2f(startX, startY);
+        glVertex2f(startX + boxWidth, startY);
+        glVertex2f(startX + boxWidth, startY - boxHeight);
+        glVertex2f(startX, startY - boxHeight);
+        glEnd();
+    }
+    glColor3f(1.0f* lightingFactor, 1.0f* lightingFactor, 1.0f* lightingFactor); // reset warna
+}
+
+void drawTree(int x, int y) {
+    // Batang pohon (gradasi vertikal coklat)
+    glBegin(GL_POLYGON);
+        glColor3f(0.65f * lightingFactor, 0.32f * lightingFactor, 0.10f * lightingFactor); // lebih terang (atas)
+        glVertex2i(x - 5, y + 30);   // atas kiri
+        glVertex2i(x + 5, y + 30);   // atas kanan
+
+        glColor3f(0.40f * lightingFactor, 0.20f * lightingFactor, 0.05f * lightingFactor); // lebih gelap (bawah)
+        glVertex2i(x + 5, y);        // bawah kanan
+        glVertex2i(x - 5, y);        // bawah kiri
+    glEnd();
+
+    // Daun pohon (3 lapisan segitiga dengan gradasi)
+
+    // Lapisan bawah daun
+    glBegin(GL_TRIANGLES);
+        glColor3f(0.2f * lightingFactor, 0.7f * lightingFactor, 0.2f * lightingFactor); // atas kiri (terkena cahaya)
+        glVertex2i(x - 25, y + 30);  // kiri bawah
+
+        glColor3f(0.0f * lightingFactor, 0.5f * lightingFactor, 0.0f * lightingFactor); // atas tengah (sedang)
+        glVertex2i(x, y + 60);       // puncak
+
+        glColor3f(0.0f* lightingFactor, 0.35f* lightingFactor, 0.0f* lightingFactor); // kanan bawah (bayangan)
+        glVertex2i(x + 25, y + 30);  // kanan bawah
+    glEnd();
+
+    // Lapisan tengah daun
+    glBegin(GL_TRIANGLES);
+        glColor3f(0.2f* lightingFactor, 0.7f* lightingFactor, 0.2f* lightingFactor);
+        glVertex2i(x - 20, y + 50);
+
+        glColor3f(0.0f* lightingFactor, 0.5f* lightingFactor, 0.0f* lightingFactor);
+        glVertex2i(x, y + 75);
+
+        glColor3f(0.0f* lightingFactor, 0.35f* lightingFactor, 0.0f* lightingFactor);
+        glVertex2i(x + 20, y + 50);
+    glEnd();
+
+    // Lapisan atas daun
+    glBegin(GL_TRIANGLES);
+        glColor3f(0.2f* lightingFactor, 0.7f* lightingFactor, 0.2f* lightingFactor);
+        glVertex2i(x - 15, y + 70);
+
+        glColor3f(0.0f* lightingFactor, 0.5f* lightingFactor, 0.0f* lightingFactor);
+        glVertex2i(x, y + 90);
+
+        glColor3f(0.0f* lightingFactor, 0.35f* lightingFactor, 0.0f* lightingFactor);
+        glVertex2i(x + 15, y + 70);
+    glEnd();
+}
+
+void drawBoatWithShadow(int x, int y) {
+    int scale = 2;  // Skala perbesaran
+
+    // --- BADAN PERAHU ---
+    glBegin(GL_POLYGON);
+        glColor3f(0.6f* lightingFactor, 0.3f* lightingFactor, 0.1f* lightingFactor);  // kiri terang
+        glVertex2i(x - 30 * scale, y);
+        glColor3f(0.4f* lightingFactor, 0.2f* lightingFactor, 0.0f* lightingFactor);  // kanan gelap
+        glVertex2i(x + 30 * scale, y);
+        glVertex2i(x + 20 * scale, y - 15 * scale);
+        glVertex2i(x - 20 * scale, y - 15 * scale);
+    glEnd();
+
+    // --- TIANG ---
+    glColor3f(0.7f* lightingFactor, 0.7f* lightingFactor, 0.7f* lightingFactor);
+    glBegin(GL_LINES);
+        glVertex2i(x, y);
+        glVertex2i(x, y + 40 * scale);
+    glEnd();
+
+    // --- LAYAR KIRI (gradasi putih ke abu terang) ---
+    glBegin(GL_TRIANGLES);
+        glColor3f(1.0f* lightingFactor, 1.0f* lightingFactor, 1.0f* lightingFactor);        // atas terang
+        glVertex2i(x, y + 40 * scale);
+        glColor3f(0.9f* lightingFactor, 0.9f* lightingFactor, 0.9f* lightingFactor);        // bawah
+        glVertex2i(x, y);
+        glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor);        // ujung kiri
+        glVertex2i(x - 20 * scale, y + 20 * scale);
+    glEnd();
+
+    // --- LAYAR KANAN (gradasi biru muda ke biru abu) ---
+    glBegin(GL_TRIANGLES);
+        glColor3f(0.6f* lightingFactor, 0.8f* lightingFactor, 1.0f* lightingFactor);        // atas
+        glVertex2i(x, y + 40 * scale);
+        glColor3f(0.5f* lightingFactor, 0.7f* lightingFactor, 0.9f* lightingFactor);        // bawah
+        glVertex2i(x, y);
+        glColor3f(0.4f* lightingFactor, 0.6f* lightingFactor, 0.8f* lightingFactor);        // ujung kanan
+        glVertex2i(x + 20 * scale, y + 20 * scale);
+    glEnd();
+}
+
+// fungsi bantu: lingkaran gradasi
+void drawCircleGradient(int centerX, int centerY, int radius,
+                        float rInner, float gInner, float bInner,
+                        float rOuter, float gOuter, float bOuter) {
+    int segments = 100;
+    glBegin(GL_TRIANGLE_FAN);
+        glColor3f(rInner* lightingFactor, gInner* lightingFactor, bInner* lightingFactor);
+        glVertex2i(centerX, centerY);
+        for (int i = 0; i <= segments; i++) {
+            float angle = 2.0f * 3.14159f * i / segments;
+            float x = centerX + cos(angle) * radius;
+            float y = centerY + sin(angle) * radius;
+            glColor3f(rOuter* lightingFactor, gOuter* lightingFactor, bOuter* lightingFactor);
+            glVertex2i((int)x, (int)y);
+        }
+    glEnd();
+}
+
+// roda pakai yang sudah kamu suka (gradasi hitam abu)
+void drawCarWheels(int carx, int cary) {
+    int wheelRadius = 20;
+    int wheelCenterY = cary - 40;
+    drawCircleGradient(carx - 45, wheelCenterY, wheelRadius,
+                       0.1f, 0.1f, 0.1f,
+                       0.3f, 0.3f, 0.3f);
+    drawCircleGradient(carx - 45, wheelCenterY, wheelRadius - 7,
+                       0.7f, 0.7f, 0.7f,
+                       0.9f, 0.9f, 0.9f);
+    drawCircleGradient(carx + 45, wheelCenterY, wheelRadius,
+                       0.1f, 0.1f, 0.1f,
+                       0.3f, 0.3f, 0.3f);
+    drawCircleGradient(carx + 45, wheelCenterY, wheelRadius - 7,
+                       0.7f, 0.7f, 0.7f,
+                       0.9f, 0.9f, 0.9f);
+}
+
+void drawCarBody(int carx, int cary) {
+    // body bawah (utama)
+    glBegin(GL_POLYGON);
+    glColor3f(0.2f* lightingFactor, 0.6f* lightingFactor, 1.0f* lightingFactor);  // biru terang
+    glVertex2i(carx - 60, cary - 20);
+    glVertex2i(carx + 60, cary - 20);
+    glVertex2i(carx + 60, cary + 10);
+    glVertex2i(carx - 60, cary + 10);
+    glEnd();
+
+    // body atas (atap mobil)
+    glBegin(GL_POLYGON);
+    glColor3f(0.1f* lightingFactor, 0.4f* lightingFactor, 0.8f* lightingFactor);  // biru lebih gelap
+    glVertex2i(carx - 40, cary + 10);
+    glVertex2i(carx + 40, cary + 10);
+    glVertex2i(carx + 25, cary + 35);
+    glVertex2i(carx - 25, cary + 35);
+    glEnd();
+
+    // jendela depan
+    glBegin(GL_POLYGON);
+    glColor3f(0.7f* lightingFactor, 0.9f* lightingFactor, 1.0f* lightingFactor);  // biru muda transparan
+    glVertex2i(carx - 22, cary + 12);
+    glVertex2i(carx - 5, cary + 12);
+    glVertex2i(carx - 5, cary + 33);
+    glVertex2i(carx - 15, cary + 33);
+    glEnd();
+
+    // jendela belakang
+    glBegin(GL_POLYGON);
+    glColor3f(0.7f* lightingFactor, 0.9f* lightingFactor, 1.0f* lightingFactor);  // sama seperti jendela depan
+    glVertex2i(carx + 5, cary + 12);
+    glVertex2i(carx + 22, cary + 12);
+    glVertex2i(carx + 15, cary + 33);
+    glVertex2i(carx + 5, cary + 33);
+    glEnd();
+}
+
+void drawCarDetail(int carx, int cary) {
+    // lampu depan (kiri)
+    glBegin(GL_POLYGON);
+    glColor3f(1.0f * lightingFactor, 1.0f * lightingFactor, 0.0f * lightingFactor); // kuning
+    glVertex2i(carx - 62, cary);
+    glVertex2i(carx - 60, cary);
+    glVertex2i(carx - 60, cary + 5);
+    glVertex2i(carx - 62, cary + 5);
+    glEnd();
+
+    // lampu belakang (kanan)
+    glBegin(GL_POLYGON);
+    glColor3f(1.0f* lightingFactor, 0.0f* lightingFactor, 0.0f* lightingFactor); // merah
+    glVertex2i(carx + 60, cary);
+    glVertex2i(carx + 62, cary);
+    glVertex2i(carx + 62, cary + 5);
+    glVertex2i(carx + 60, cary + 5);
+    glEnd();
+
+    // gagang pintu
+    glBegin(GL_LINES);
+    glColor3f(0.3f* lightingFactor, 0.3f* lightingFactor, 0.3f* lightingFactor);
+    glVertex2i(carx - 15, cary);
+    glVertex2i(carx + 15, cary);
+    glEnd();
+
+    // spion kiri
+    glBegin(GL_TRIANGLES);
+    glColor3f(0.1f* lightingFactor, 0.1f* lightingFactor, 0.1f* lightingFactor);
+    glVertex2i(carx - 40, cary + 20);
+    glVertex2i(carx - 45, cary + 25);
+    glVertex2i(carx - 40, cary + 25);
+    glEnd();
+
+    // spion kanan
+    glBegin(GL_TRIANGLES);
+    glColor3f(0.1f* lightingFactor, 0.1f* lightingFactor, 0.1f* lightingFactor);
+    glVertex2i(carx + 40, cary + 20);
+    glVertex2i(carx + 45, cary + 25);
+    glVertex2i(carx + 40, cary + 25);
+    glEnd();
+}
+
+void getSunPosition(float& x, float& y) {
+    float totalT = 0.0f;
+
+    if (waktuSaatIni == PAGI) {
+        totalT = transitionProgress / 3.0f; // 0.0 - 1/3
+    } else if (waktuSaatIni == SIANG) {
+        totalT = (1.0f / 3.0f) + (transitionProgress / 3.0f); // 1/3 - 2/3
+    } else if (waktuSaatIni == SORE) {
+        totalT = (2.0f / 3.0f) + (transitionProgress / 3.0f); // 2/3 - 1.0
+    } else {
+        totalT = 1.0f; // malam: matahari sudah tidak terlihat
+    }
+
+    if (totalT > 1.0f) totalT = 1.0f;
+
+    // Matahari bergerak setengah lingkaran dari kiri ke kanan (x: -400 → +400)
+    float angle = totalT * M_PI; // 0 → π
+
+    x = -400.0f * cos(angle);                 // dari -400 ke +400
+    y = 200.0f * sin(angle) + 250.0f;         // dari 250 ke 450 (puncak di siang hari)
+
+    // Saat malam atau sudah terlalu rendah, sembunyikan matahari
+    if (waktuSaatIni == MALAM || y < 150.0f) {
+        y = -999.0f; // Tidak digambar
+    }
+}
+
+
+
+void getMoonPosition(float& x, float& y) {
+    float angle = transitionProgress * M_PI; // 0 to π
+    float radius = 400.0f;
+    x = -400.0f * cos(angle);     // dari +400 ke -400
+    y = 200.0f * sin(angle) + 250.0f;
+}
+
+void drawSun() {
+    float cx, cy;
+    getSunPosition(cx, cy);
+
+    if (cy < 0) return; // tidak digambar jika disembunyikan
+
+    glColor3f(1.0f * lightingFactor, 1.0f * lightingFactor, 0.0f);
+    float radius = 30;
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx, cy);
+    for (int i = 0; i <= 100; i++) {
+        float angle = i * 2.0f * M_PI / 100;
+        glVertex2f(cx + cos(angle) * radius, cy + sin(angle) * radius);
+    }
+    glEnd();
+}
+
+void drawMoon() {
+    float cx, cy;
+    getMoonPosition(cx, cy);
+    float radius = 25;
+
+    glColor3f(1.0f, 1.0f, 0.8f); // warna kuning pucat
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx, cy);
+    for (int i = 0; i <= 100; i++) {
+        float angle = i * 2.0f * M_PI / 100;
+        glVertex2f(cx + cos(angle) * radius, cy + sin(angle) * radius);
+    }
+    glEnd();
+}
+
+void drawStars() {
+    glColor3f(1.0f, 1.0f, 1.0f);
+    int starPositions[10][2] = {
+        {-300, 300}, {-200, 340}, {-100, 320},
+        {0, 360}, {100, 300}, {200, 330},
+        {300, 310}, {-250, 280}, {50, 340}, {-150, 350}
+    };
+
+    for (int i = 0; i < 10; i++) {
+        glBegin(GL_POINTS);
+        glVertex2i(starPositions[i][0], starPositions[i][1]);
+        glEnd();
+    }
+}
+
+void myDisplay() {
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // langit
+    /*glBegin(GL_POLYGON);
+    glColor3f(0.7, 0.8, 1);
+    glVertex2i(-500, 150);
+    glVertex2i(500, 150);
+    glVertex2i(500, 400);
+    glColor3f(1.0f, 0.7f, 0.5f);
+    glVertex2i(-500, 400);
+    glEnd();*/
+
+    // Dua warna: bawah (r1) → atas (r2), untuk waktu saat ini & berikutnya
+    float r1_b, g1_b, b1_b, r1_t, g1_t, b1_t;  // waktu sekarang: bawah & atas
+    float r2_b, g2_b, b2_b, r2_t, g2_t, b2_t;  // waktu berikutnya: bawah & atas
+
+    switch (waktuSaatIni) {
+    case SORE:
+        r1_b = 0.7f; g1_b = 0.8f; b1_b = 1.0f;   // bawah langit senja
+        r1_t = 1.0f; g1_t = 0.7f; b1_t = 0.5f;   // atas langit jingga
+
+        r2_b = 0.2f; g2_b = 0.25f; b2_b = 0.4f;
+        r2_t = 0.25f; g2_t = 0.3f; b2_t = 0.5f;
+        break;
+
+    case MALAM:
+        r2_b = 0.05f; g2_b = 0.05f; b2_b = 0.15f; // menuju malam (lebih gelap)
+        r2_t = 0.1f;  g2_t = 0.1f;  b2_t = 0.2f;
+
+        r2_b = 0.3f; g2_b = 0.4f; b2_b = 0.6f; // menjelang pagi (biru keabu-abuan)
+        r2_t = 0.5f; g2_t = 0.6f; b2_t = 0.9f;
+        break;
+
+    case PAGI:
+        r1_b = 0.3f; g1_b = 0.4f; b1_b = 0.6f;
+        r1_t = 0.5f; g1_t = 0.6f; b1_t = 0.9f;
+
+        r2_b = 0.7f; g2_b = 0.9f; b2_b = 1.0f; // langit biru cerah
+        r2_t = 1.0f; g2_t = 1.0f; b2_t = 1.0f;
+        break;
+
+    case SIANG:
+        r1_b = 0.7f; g1_b = 0.9f; b1_b = 1.0f;
+        r1_t = 1.0f; g1_t = 1.0f; b1_t = 1.0f;
+
+        r2_b = 0.8f; g2_b = 0.8f; b2_b = 1.0f;   // menjelang sore
+        r2_t = 1.0f; g2_t = 0.7f; b2_t = 0.5f;
+        break;
+}
+
+
+    float r, g, b;
+    float rb, gb, bb, rt, gt, bt;
+    lerpColor(r1_b, g1_b, b1_b, r2_b, g2_b, b2_b, transitionProgress, rb, gb, bb); // bawah
+    lerpColor(r1_t, g1_t, b1_t, r2_t, g2_t, b2_t, transitionProgress, rt, gt, bt); // atas
+
+    glBegin(GL_POLYGON);
+    glColor3f(rb, gb, bb); // bawah
+    glVertex2i(-500, 150);
+    glVertex2i(500, 150);
+    glColor3f(rt, gt, bt); // atas
+    glVertex2i(500, 400);
+    glVertex2i(-500, 400);
+    glEnd();
+
+    drawSun();
+    if (waktuSaatIni == MALAM) {
+        drawMoon();
+        drawStars();
+    }
+     glPointSize(3.0f);
+
+
+    //rumput
+    glBegin(GL_POLYGON);
+    glColor3f(0.0f * lightingFactor, 0.3f * lightingFactor, 0.0f* lightingFactor);
+    glVertex2i(-500, 0);
+    glVertex2i(500, 0);
+    glColor3f(0.0f* lightingFactor, 0.6f* lightingFactor, 0.0f* lightingFactor);
+    glVertex2i(500, -400);
+    glVertex2i(-500, -400);
+    glEnd();
+
+
+    // gunung
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i(-500, -50);
+    glVertex2i(-500, 300);
+    glVertex2i(-499, 299.5);
+    glVertex2i(-498, 299);
+    glVertex2i(-497, 298.5);
+    glVertex2i(-496, 298);
+    glVertex2i(-495, 297.5);
+    glVertex2i(-494, 298);
+    glVertex2i(-493, 298.5);
+    glVertex2i(-492, 299);
+    glVertex2i(-491, 301);
+    glVertex2i(-490, 302);
+    //glColor3f(0.80f, 0.50f, 0.40f);
+    glVertex2i(-485, 305);
+    glVertex2i(-470, 312);
+    glVertex2i(-456.25, 324.679);
+    glVertex2i(-453.125, 324.679);
+    glVertex2i(-452.344, 323.538);
+    glVertex2i(-450.781, 322.397);
+    glVertex2i(-450, 322.397);
+    glVertex2i(-449.219, 321.255);
+    glVertex2i(-448.438, 321.255);
+    glVertex2i(-446.094, 321.255);
+    glVertex2i(-444.531, 318.973);
+    glVertex2i(-442.969, 317.832);
+    glVertex2i(-441.406, 317.832);
+    glVertex2i(-439.062, 317.832);
+    glVertex2i(-436.719, 317.832);
+    glVertex2i(-435.156, 320.114);
+    glVertex2i(-432.812, 322.397);
+    glVertex2i (-428.906, 326.961);
+    glVertex2i (-425.781, 328.103);
+    glVertex2i (-424.219, 330.385);
+    glVertex2i (-422.656, 332.668);
+    glVertex2i (-421.094, 333.809);
+    glVertex2i (-419.531, 334.95);
+    glVertex2i (-417.969, 334.95);
+    glVertex2i (-416.406, 334.95);
+    glVertex2i (-415.625, 333.809);
+    glVertex2i (-414.062, 333.809);
+    glVertex2i (-413.281, 336.091);
+    glVertex2i (-411.719, 336.091);
+    glVertex2i (-410.156, 336.091);
+    glVertex2i (-410.156, 336.091);
+    glVertex2i (-408.594, 336.091);
+    glVertex2i (-408.594, 336.091);
+    glVertex2i (-407.031, 336.091);
+    glVertex2i (-405.469, 336.091);
+    glVertex2i (-405.469, 334.95);
+    glVertex2i (-403.906, 333.809);
+    glVertex2i (-402.344, 333.809);
+    glVertex2i (-400.781, 331.526);
+    glVertex2i (-398.438, 331.526);
+    glVertex2i (-396.875, 331.526);
+    glVertex2i (-395.312, 331.526);
+    glVertex2i (-393.75, 332.668);
+    glVertex2i (-392.969, 333.809);
+    glVertex2i (-392.188, 333.809);
+    glVertex2i (-390.625, 332.668);
+    glVertex2i (-389.844, 330.385);
+    glVertex2i (-389.062, 329.244);
+    glVertex2i (-387.5, 329.244);
+    glVertex2i (-385.938, 331.526);
+    glVertex2i (-383.594, 332.668);
+    glVertex2i (-382.812, 333.809);
+    glVertex2i (-368.75, 314.408);
+    glVertex2i (-365.625, 315.549);
+    glVertex2i (-361.719, 308.702);
+    glVertex2i (-358.594, 299.572);
+    glVertex2i (-353.906, 292.725);
+    glVertex2i (-350.781, 289.301);
+    glVertex2i (-348.438, 288.16);
+    glVertex2i (-346.094, 285.877);
+    glVertex2i (-341.406, 276.747);
+    glVertex2i (-338.281, 269.9);
+    glVertex2i (-335.156, 266.476);
+    glVertex2i (-332.031, 258.488);
+    glVertex2i (-325.781, 248.217);
+    glVertex2i (-314.844, 231.098);
+    glVertex2i (-307.812, 218.545);
+    glVertex2i (-301.562, 209.415);
+    glVertex2i (-293.75, 193.438);
+    glVertex2i (-287.5, 179.743);
+    glVertex2i (-339.844, 219.686);
+    glVertex2i (-335.938, 250.499);
+    glVertex2i (-328.906, 256.205);
+    glVertex2i (-320.312, 256.205);
+    glVertex2i (-310.156, 253.923);
+    glVertex2i (-300.781, 251.641);
+    glVertex2i (-289.844, 253.923);
+    glVertex2i (-280.469, 258.488);
+    glVertex2i (-270.312, 260.77);
+    glVertex2i (-259.375, 259.629);
+    glVertex2i (-253.906, 258.488);
+    glVertex2i (-247.656, 249.358);
+    glVertex2i (-241.406, 244.793);
+    glVertex2i (-229.688, 234.522);
+    glVertex2i (-221.875, 224.251);
+    glVertex2i (-215.625, 219.686);
+    glVertex2i (-207.812, 216.263);
+    glVertex2i (-203.906, 215.121);
+    glVertex2i (-197.656, 215.121);
+    glVertex2i (-188.281, 219.686);
+    glVertex2i (-180.469, 227.675);
+    glVertex2i (-174.219, 235.663);
+    glVertex2i (-160.156, 247.076);
+    glVertex2i (-147.656, 253.923);
+    glVertex2i (-135.156, 263.053);
+    glVertex2i (-125, 267.618);
+    glVertex2i (-112.5, 276.747);
+    glVertex2i (-104.688, 276.747);
+    glVertex2i (-97.6562, 273.324);
+    glVertex2i (-94.5312, 276.747);
+    glVertex2i (-91.4062, 279.03);
+    glVertex2i (-88.2812, 279.03);
+    glVertex2i (-82.8125, 276.747);
+    glVertex2i (-74.2188, 272.183);
+    glVertex2i (-63.2812, 261.912);
+    glVertex2i (-50, 253.923);
+    glVertex2i (-38.2812, 245.934);
+    glVertex2i (-30.4688, 239.087);
+    glVertex2i (-17.9688, 233.381);
+    glVertex2i (-41.4062, 215.121);
+    glVertex2i (-3.90625, 239.087);
+    glVertex2i (7.03125, 247.076);
+    glVertex2i (13.2812, 252.782);
+    glVertex2i (25, 259.629);
+    glVertex2i (35.1562, 267.618);
+    glVertex2i (50.7812, 277.889);
+    glVertex2i (63.2812, 285.877);
+    glVertex2i (68.75, 288.16);
+    glVertex2i (71.875, 284.736);
+    glVertex2i (77.3438, 281.312);
+    glVertex2i (85.9375, 284.736);
+    glVertex2i (96.875, 285.877);
+    glVertex2i (108.594, 289.301);
+    glVertex2i (118.75, 295.007);
+    glVertex2i (130.469, 295.007);
+    glVertex2i (137.5, 293.866);
+    glVertex2i (144.531, 292.725);
+    glVertex2i (155.469, 290.442);
+    glVertex2i (169.531, 297.29);
+    glVertex2i (180.469, 297.29);
+    glVertex2i (189.062, 295.007);
+    glVertex2i (200.781, 279.03);
+    glVertex2i (207.812, 269.9);
+    glVertex2i (214.844, 264.194);
+    glVertex2i (221.094, 267.618);
+    glVertex2i (228.906, 269.9);
+    glVertex2i (235.156, 267.618);
+    glVertex2i (244.531, 257.347);
+    glVertex2i (257.031, 243.652);
+    glVertex2i (258.594, 235.663);
+    glVertex2i (264.844, 225.392);
+    glVertex2i (274.219, 221.969);
+    glVertex2i (276.562, 220.827);
+    glVertex2i (286.719, 212.839);
+    glVertex2i (296.875, 208.274);
+    glVertex2i (308.594, 202.568);
+    glVertex2i (322.656, 198.003);
+    glVertex2i (335.156, 192.297);
+    glVertex2i (341.406, 187.732);
+    glVertex2i (348.438, 180.884);
+    glVertex2i (360.156, 177.461);
+    glVertex2i (376.562, 171.755);
+    glVertex2i (392.188, 160.342);
+    glVertex2i (408.594, 160.342);
+    glVertex2i (260.156, 171.755);
+    glVertex2i (239.062, 241.37);
+    glVertex2i (250.781, 247.076);
+    glVertex2i (263.281, 255.064);
+    glVertex2i (271.094, 257.347);
+    glVertex2i (280.469, 265.335);
+    glVertex2i (288.281, 272.183);
+    glVertex2i (300.781, 281.312);
+    glVertex2i (310.938, 285.877);
+    glVertex2i (320.312, 297.29);
+    glVertex2i (330.469, 298.431);
+    glVertex2i (336.719, 295.007);
+    glVertex2i (339.844, 290.442);
+    glVertex2i (348.438, 282.454);
+    glVertex2i (355.469, 274.465);
+    glVertex2i (324.219, 216.263);
+    glVertex2i (336.719, 203.709);
+    glVertex2i (340.625, 217.404);
+    glVertex2i (345.312, 227.675);
+    glVertex2i (352.344, 242.511);
+    glVertex2i (355.469, 253.923);
+    glVertex2i (361.719, 263.053);
+    glVertex2i (371.875, 275.606);
+    glVertex2i (378.906, 288.16);
+    glVertex2i (386.719, 299.572);
+    glVertex2i (392.188, 312.126);
+    glVertex2i (403.906, 324.679);
+    glVertex2i (414.062, 324.679);
+    glVertex2i (423.438, 322.397);
+    glVertex2i (429.688, 322.397);
+    glVertex2i (435.156, 316.69);
+    glVertex2i (444.531, 308.702);
+    glVertex2i (450.781, 305.278);
+    glVertex2i (458.594, 292.725);
+    glVertex2i (465.625, 290.442);
+    glVertex2i (476.562, 285.877);
+    glVertex2i (486.719, 282.454);
+    glVertex2i (500, 282.927);
+    glVertex2i(500, 0);
+    glEnd();
+
+    // bayangan gunung
+    glColor3f(0.85f* lightingFactor, 0.52f* lightingFactor, 0.40f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (-500, -47.3609);
+    glVertex2i (-499.219, 300.431);
+    glVertex2i (-494.531, 298.148);
+    glVertex2i (-493.75, 299.431);
+    glVertex2i (-492.625, 300.713);
+    glVertex2i (-485.156, 306.278);
+    glVertex2i (-481.25, 307.419);
+    glVertex2i (-474.219, 310.984);
+    glVertex2i (-469.531, 316.408);
+    glVertex2i (-461.719, 320.973);
+    glVertex2i (-458.594, 323.397);
+    glVertex2i (-455.469, 324.538);
+    glVertex2i (-453.125, 318.832);
+    glVertex2i (-457.031, 312.126);
+    glVertex2i (-460.156, 300.572);
+    glVertex2i (-465.625, 286.877);
+    glVertex2i (-467.969, 266.335);
+    glVertex2i (-463.281, 250.358);
+    glVertex2i (-460.938, 236.805);
+    glVertex2i (-459.375, 226.534);
+    glVertex2i (-460.156, 207.133);
+    glVertex2i (-465.625, 185.449);
+    glVertex2i (-470.312, 168.331);
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glVertex2i (-473.438, 155.777);
+    glVertex2i (-476.562, 142.083);
+    glVertex2i (-476.562, 128.388);
+    glVertex2i (-472.656, 106.705);
+    glVertex2i (-467.188, 87.3038);
+    glVertex2i (-464.062, 77.0328);
+    glVertex2i (-464.062, 59.9144);
+    glVertex2i (-460.938, 32.525);
+    glVertex2i (-465.625, 17.689);
+    glVertex2i (-475.781, 14.2654);
+    glVertex2i (-485.938, 30.2425);
+    glVertex2i (-482.031, 14.2654);
+    glVertex2i (-489.844, 2.85306);
+    glVertex2i (-500, -2.85306);
+    glEnd();
+
+
+    // bayangan gunung2
+    glColor3f(0.85f* lightingFactor, 0.52f* lightingFactor, 0.40f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (-398.438, 332.668);
+    glVertex2i (-394.531, 333.809);
+    glVertex2i (-390.625, 334.95);
+    glVertex2i (-386.719, 332.668);
+    glVertex2i (-383.594, 332.668);
+    glVertex2i (-382.812, 325.82);
+    glVertex2i (-387.5, 321.255);
+    glVertex2i (-385.938, 306.419);
+    glVertex2i (-379.688, 296.148);
+    glVertex2i (-376.562, 282.454);
+    glVertex2i (-373.438, 269.9);
+    glVertex2i (-373.438, 249.358);
+    glVertex2i (-374.219, 231.098);
+    glVertex2i (-374.219, 215.121);
+    glVertex2i (-370.312, 205.991);
+    glVertex2i (-367.969, 195.72);
+    glVertex2i (-365.625, 185.449);
+    glVertex2i (-363.281, 168.331);
+    glVertex2i (-361.719, 160.342);
+    glVertex2i (-360.156, 146.648);
+    glVertex2i (-360.156, 129.529);
+    glVertex2i (-360.156, 108.987);
+    glVertex2i (-354.688, 89.5863);
+    glVertex2i (-349.219, 65.6206);
+    glVertex2i (-353.906, 46.2197);
+    glVertex2i (-360.156, 29.1013);
+    glVertex2i (-355.469, 13.1241);
+    glVertex2i (-349.219, -1.71185);
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glVertex2i (-342.188, -17.689);
+    glVertex2i (-335.156, -26.8188);
+    glVertex2i (-332.031, -38.2311);
+    glVertex2i (-360.156, -37.0899);
+    glVertex2i (-371.875, -35.9486);
+    glVertex2i (-386.719, -37.0899);
+    glVertex2i (-401.562, -34.8074);
+    glVertex2i (-400.781, -14.2654);
+    glVertex2i (-398.438, 10.8416);
+    glVertex2i (-385.156, 32.525);
+    glVertex2i (-384.375, 49.6434);
+    glVertex2i (-386.719, 66.7618);
+    glVertex2i (-386.719, 82.7389);
+    glVertex2i (-389.844, 95.2924);
+    glVertex2i (-395.312, 103.281);
+    glVertex2i (-396.094, 122.682);
+    glVertex2i (-394.531, 140.942);
+    glVertex2i (-389.062, 163.766);
+    glVertex2i (-391.406, 174.037);
+    glVertex2i (-392.969, 190.014);
+    glVertex2i (-392.969, 218.545);
+    glVertex2i (-390.625, 233.381);
+    glVertex2i (-395.312, 244.793);
+    glVertex2i (-401.562, 260.77);
+    glVertex2i (-410.156, 280.171);
+    glVertex2i (-420.312, 297.29);
+    glVertex2i (-426.562, 305.278);
+    glVertex2i (-432.812, 310.984);
+    glVertex2i (-435.938, 315.549);
+    glVertex2i (-428.125, 324.679);
+    glVertex2i (-422.656, 333.809);
+    glVertex2i (-416.406, 336.091);
+    glVertex2i (-411.719, 339.515);
+    glVertex2i (-405.469, 336.091);
+    glVertex2i (-332.031, -40.5135);
+    glVertex2i (-412.5, -43.9372);
+    glVertex2i (-405.469, -17.689);
+    glVertex2i (-400.781, 10.8416);
+    glVertex2i (-400, 32.525);
+    glVertex2i (-406.25, 41.6548);
+    glVertex2i (-406.25, 67.903);
+    glVertex2i (-400.781, 83.8802);
+    glVertex2i (-403.906, 103.281);
+    glVertex2i (-412.5, 122.682);
+    glVertex2i (-410.938, 135.235);
+    glVertex2i (-403.906, 159.201);
+    glVertex2i (-401.562, 176.32);
+    glVertex2i (-389.844, 185.449);
+    glVertex2i (-389.844, 280.171);
+    glVertex2i (-408.594, 298.431);
+    glVertex2i (-435.156, 316.69);
+    glVertex2i (-434.375, 324.679);
+    glVertex2i (-428.125, 328.103);
+    glVertex2i (-424.219, 328.103);
+    glEnd();
+
+    glColor3f(0.85f* lightingFactor, 0.52f* lightingFactor, 0.40f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (-100, 275.606);
+    glVertex2i (-104.688, 279.03);
+    glVertex2i (-110.156, 277.889);
+    glVertex2i (-117.969, 275.606);
+    glVertex2i (-124.219, 267.618);
+    glVertex2i (-132.031, 264.194);
+    glVertex2i (-138.281, 263.053);
+    glVertex2i (-146.094, 256.205);
+    glVertex2i (-154.688, 253.923);
+    glVertex2i (-160.156, 248.217);
+    glVertex2i (-167.969, 244.793);
+    glVertex2i (-176.562, 235.663);
+    glVertex2i (-186.719, 227.675);
+    glVertex2i (-192.969, 221.969);
+    glVertex2i (-196.094, 216.263);
+    glVertex2i (-198.438, 212.839);
+    glVertex2i (-191.406, 208.274);
+    glVertex2i (-183.594, 200.285);
+    glVertex2i (-178.906, 195.72);
+    glVertex2i (-171.094, 183.167);
+    glVertex2i (-162.5, 174.037);
+    glVertex2i (-154.688, 169.472);
+    glVertex2i (-139.844, 155.777);
+    glVertex2i (-130.469, 150.071);
+    glVertex2i (-114.844, 142.083);
+    glVertex2i (-96.875, 132.953);
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glVertex2i (-86.7188, 130.67);
+    glVertex2i (-83.5938, 139.8);
+    glVertex2i (-83.5938, 151.213);
+    glVertex2i (-82.8125, 167.19);
+    glVertex2i (-82.8125, 174.037);
+    glVertex2i (-88.2812, 183.167);
+    glVertex2i (-99.2188, 185.449);
+    glVertex2i (-109.375, 187.732);
+    glVertex2i (-111.719, 202.568);
+    glVertex2i (-106.25, 217.404);
+    glVertex2i (-102.344, 224.251);
+    glVertex2i (-99.2188, 233.381);
+    glVertex2i (-97.6562, 243.652);
+    glVertex2i (-97.6562, 255.064);
+    glVertex2i (-98.4375, 266.476);
+    glEnd();
+
+    glColor3f(0.85f* lightingFactor, 0.52f* lightingFactor, 0.40f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (66.4062, 290.442);
+    glVertex2i (49.2188, 281.312);
+    glVertex2i (39.0625, 274.465);
+    glVertex2i (21.0938, 264.194);
+    glVertex2i (4.6875, 255.064);
+    glVertex2i (-11.7188, 245.934);
+    glVertex2i (-23.4375, 241.37);
+    glVertex2i (-28.125, 234.522);
+    glVertex2i (-35.1562, 212.839);
+    glVertex2i (-42.9688, 194.579);
+    glVertex2i (-53.125, 178.602);
+    glVertex2i (-64.8438, 155.777);
+    glVertex2i (-76.5625, 139.8);
+    glVertex2i (-85.1562, 131.812);
+    glVertex2i (-76.5625, 122.682);
+    glVertex2i (-58.5938, 119.258);
+    glVertex2i (-26.5625, 126.106);
+    glVertex2i (2.34378, 139.8);
+    glVertex2i (19.5312, 151.213);
+    glVertex2i (53.9062, 166.048);
+    glVertex2i (69.5312, 156.919);
+    glVertex2i (85.9375, 150.071);
+    glVertex2i (98.4375, 150.071);
+    glVertex2i (110.938, 148.93);
+    glVertex2i (121.875, 126.106);
+    glVertex2i (130.469, 115.835);
+    glVertex2i (131.25, 105.564);
+    glVertex2i (138.281, 86.1626);
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glVertex2i (146.875, 67.903);
+    glVertex2i (148.438, 58.7732);
+    glVertex2i (155.469, 41.6548);
+    glVertex2i (164.844, 25.6776);
+    glVertex2i (168.75, 6.27676);
+    glVertex2i (169.531, -14.2654);
+    glVertex2i (192.969, -10.8416);
+    glVertex2i (212.5, -9.70041);
+    glVertex2i (228.125, -10.8416);
+    glVertex2i (228.906, 3.99426);
+    glVertex2i (216.406, 17.689);
+    glVertex2i (203.906, 33.6662);
+    glVertex2i (185.156, 56.4907);
+    glVertex2i (171.094, 96.4337);
+    glVertex2i (163.281, 119.258);
+    glVertex2i (137.5, 154.636);
+    glVertex2i (123.438, 154.636);
+    glVertex2i (110.938, 177.461);
+    glVertex2i (110.156, 210.556);
+    glVertex2i (103.125, 227.675);
+    glVertex2i (88.2812, 251.641);
+    glVertex2i (70.3125, 272.183);
+    glEnd();
+
+    glColor3f(0.85f* lightingFactor, 0.52f* lightingFactor, 0.40f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (157.812, 293.257);
+    glVertex2i (167.969, 301.291);
+    glVertex2i (178.906, 302.439);
+    glVertex2i (183.594, 303.587);
+    glVertex2i (188.281, 301.291);
+    glVertex2i (191.406, 296.7);
+    glVertex2i (194.531, 292.109);
+    glVertex2i (197.656, 284.075);
+    glVertex2i (194.531, 265.71);
+    glVertex2i (191.406, 249.641);
+    glVertex2i (188.281, 237.016);
+    glVertex2i (188.281, 223.242);
+    glVertex2i (189.062, 208.321);
+    glVertex2i (196.094, 196.844);
+    glVertex2i (201.562, 179.627);
+    glVertex2i (205.469, 172.74);
+    glVertex2i (210.156, 155.524);
+    glVertex2i (211.719, 134.864);
+    glVertex2i (212.5, 118.795);
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glVertex2i (212.5, 100.43);
+    glVertex2i (218.75, 78.6227);
+    glVertex2i (220.312, 71.736);
+    glVertex2i (224.219, 43.0416);
+    glVertex2i (227.344, 14.3472);
+    glVertex2i (230.469, 1.72168);
+    glVertex2i (230.469, -5.16501);
+    glVertex2i (227.344, -9.7561);
+    glVertex2i (224.219, 9.7561);
+    glVertex2i (213.281, 39.5983);
+    glVertex2i (204.688, 59.1104);
+    glVertex2i (187.5, 94.6915);
+    glVertex2i (169.531, 127.977);
+    glVertex2i (157.031, 154.376);
+    glVertex2i (151.562, 172.74);
+    glVertex2i (139.844, 186.514);
+    glVertex2i (131.25, 203.73);
+    glVertex2i (121.875, 220.947);
+    glVertex2i (114.844, 230.129);
+    glVertex2i (108.594, 235.868);
+    glVertex2i (106.25, 247.346);
+    glVertex2i (103.906, 264.562);
+    glVertex2i (96.875, 272.597);
+    glVertex2i (91.4062, 285.222);
+    glVertex2i (104.688, 287.518);
+    glVertex2i (111.719, 296.7);
+    glVertex2i (124.219, 302.439);
+    glVertex2i (135.938, 302.439);
+    glVertex2i (150, 302.439);
+    glEnd();
+
+    glColor3f(0.85f* lightingFactor, 0.52f* lightingFactor, 0.40f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (400, 335.725);
+    glVertex2i (389.062, 336.872);
+    glVertex2i (382.812, 333.429);
+    glVertex2i (367.969, 321.951);
+    glVertex2i (349.219, 317.36);
+    glVertex2i (330.469, 310.473);
+    glVertex2i (323.438, 309.326);
+    glVertex2i (314.062, 303.587);
+    glVertex2i (308.594, 300.143);
+    glVertex2i (300.781, 293.257);
+    glVertex2i (292.188, 288.666);
+    glVertex2i (283.594, 284.075);
+    glVertex2i (277.344, 281.779);
+    glVertex2i (289.062, 274.892);
+    glVertex2i (294.531, 247.346);
+    glVertex2i (295.312, 238.164);
+    glVertex2i (292.188, 230.129);
+    glVertex2i (289.062, 207.174);
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glVertex2i (288.281, 186.514);
+    glVertex2i (291.406, 178.479);
+    glVertex2i (297.656, 163.558);
+    glVertex2i (304.688, 134.864);
+    glVertex2i (304.688, 118.795);
+    glVertex2i (304.688, 103.874);
+    glVertex2i (301.562, 87.8049);
+    glVertex2i (300.781, 70.5883);
+    glVertex2i (307.812, 45.3372);
+    glVertex2i (304.688, 38.4505);
+    glVertex2i (303.906, 16.6428);
+    glVertex2i (308.594, -5.16501);
+    glVertex2i (353.906, -4.01721);
+    glVertex2i (385.938, -4.01721);
+    glVertex2i (439.844, 0.573883);
+    glVertex2i (456.25, 8.60834);
+    glVertex2i (471.875, 83.2137);
+    glVertex2i (461.719, 123.386);
+    glVertex2i (447.656, 148.637);
+    glVertex2i (441.406, 184.218);
+    glVertex2i (441.406, 220.947);
+    glVertex2i (439.062, 246.198);
+    glVertex2i (428.125, 266.858);
+    glVertex2i (420.312, 285.222);
+    glVertex2i (414.844, 313.917);
+    glVertex2i (404.688, 334.577);
+    glVertex2i (406.25, 329.986);
+    glVertex2i (410.938, 321.951);
+    glVertex2i (417.969, 321.951);
+    glVertex2i (425, 321.951);
+    glVertex2i (433.594, 315.065);
+    glVertex2i (442.969, 305.882);
+    glVertex2i (448.438, 305.882);
+    glVertex2i (451.562, 301.291);
+    glVertex2i (455.469, 292.109);
+    glVertex2i (458.594, 285.222);
+    glVertex2i (458.594, 273.745);
+    glVertex2i (458.594, 254.232);
+    glVertex2i (456.25, 235.868);
+    glVertex2i (456.25, 215.208);
+    glVertex2i (446.094, 208.321);
+    glEnd();
+
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (-94.5312, 261.119);
+    glVertex2i (-98.4375, 240.459);
+    glVertex2i (-100, 230.129);
+    glVertex2i (-103.906, 224.39);
+    glVertex2i (-105.469, 218.651);
+    glVertex2i (-106.25, 209.469);
+    glVertex2i (-103.125, 197.991);
+    glVertex2i (-96.875, 192.253);
+    glVertex2i (-89.8438, 186.514);
+    glVertex2i (-74.2188, 188.809);
+    glVertex2i (-81.25, 216.356);
+    glVertex2i (-89.0625, 232.425);
+    glVertex2i (-91.4062, 251.937);
+    glEnd();
+
+    glColor3f(0.75f* lightingFactor, 0.45f* lightingFactor, 0.35f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (108.594, 119.943);
+    glVertex2i (125.781, 98.1349);
+    glVertex2i (146.875, 72.8838);
+    glVertex2i (162.5, 56.8149);
+    glVertex2i (175.781, 47.6327);
+    glVertex2i (191.406, 33.8594);
+    glVertex2i (208.594, 16.6428);
+    glVertex2i (222.656, 2.86948);
+    glVertex2i (227.344, -4.01721);
+    glVertex2i (207.812, -10.9039);
+    glVertex2i (156.25, -9.7561);
+    glVertex2i (125, -8.60831);
+    glVertex2i (112.5, -8.60831);
+    glVertex2i (104.688, 31.5638);
+    glVertex2i (107.812, 47.6327);
+    glEnd();
+
+    // Panggil fungsi
+    drawTree(492.188, 23.5294);
+    // Panggil fungsi
+    drawTree(389.844, 20.0861);
+    // Panggil fungsi
+    drawTree(356.25, 21.2339);
+    // Panggil fungsi
+    drawTree(-440, -40);
+     // Panggil fungsi
+    drawTree(450, 29.2683);
+    // Panggil fungsi
+    drawTree(407.812, 23.5294);
+    // Panggil fungsi
+    drawTree(465.625, 25.825);
+    // Panggil fungsi
+    drawTree(427.344, 13.1994);
+    // Panggil fungsi
+    drawTree(489.844, 17.7905);
+    // Panggil fungsi
+    drawTree(368.75, 21.2339);
+    // Panggil fungsi
+    drawTree(339.844, 9.7561);
+    // Panggil fungsi
+    drawTree(-420.312, -38.4505);
+    // Panggil fungsi
+    drawTree(-498.438, -33.8594);
+     // Panggil fungsi
+    drawTree(-473.438, -37.3027);
+    // Panggil fungsi
+    drawTree(-455.469, -44.1894);
+    // Panggil fungsi
+    drawTree(273.438, 8.55917);
+    // Panggil fungsi
+    drawTree(164.062, 6.27676);
+    // Panggil fungsi
+    drawTree(-6.25, -5.1355);
+    // Panggil fungsi
+    drawTree(-160.156, -14.2654);
+     // Panggil fungsi
+    drawTree(-318.75, -37.0899);
+    // Panggil fungsi
+    drawTree(-358.594, -39.3723);
+    drawTree (-138.281, -15.4066);
+    drawTree (18.75, -8.5592);
+    drawTree (181.25, -3.99429);
+    drawTree (237.5, 10.8416);
+    drawTree (214.844, -16.6428);
+    drawTree (303.125, 1.72168);
+    drawTree (-285.938, -40.746);
+    drawTree (-260.938, -23.5294);
+    drawTree (-228.906, -29.2683);
+    drawTree (36.7188, -15.495);
+    drawTree (57.8125, 1.72168);
+    drawTree (-392.969, -38.4505);
+    drawTree (114.062, -2.86945);
+
+    //semak
+    float halfCircleRadius = 50.0f;
+    int segmentsCount = 60;
+    int halfCircleCount = 20;
+    float startX = -500.0f;
+    float startY = -77.0328f;
+    float endX = 464.844f;
+    float endY = -18.8303f;
+    for (int idx = 0; idx < halfCircleCount; idx++) {
+        float t = (float)idx / (float)(halfCircleCount - 1);
+        float centerX = startX + t * (endX - startX);
+        float baseY = startY + t * (endY - startY);
+        glBegin(GL_POLYGON);
+        // setengah lingkaran atas
+        for (int i = 0; i <= segmentsCount; i++) {
+            float angle = (float)i / (float)segmentsCount * 3.1415926f;
+            float x = centerX + halfCircleRadius * cosf(angle);
+            float y = baseY + halfCircleRadius * sinf(angle);
+            // gradasi hijau: dari gelap (bawah) ke terang (atas)
+            float green = 0.3f + 0.4f * ((y - baseY) / halfCircleRadius); // 0.3 → 0.7
+            glColor3f(0.0f* lightingFactor, green * lightingFactor, 0.0f* lightingFactor);
+            glVertex2f(x, y);
+        }
+
+        // sisi bawah (garis lurus) — hijau gelap
+        glColor3f(0.0f* lightingFactor, 0.3f* lightingFactor, 0.0f* lightingFactor);
+        for (int i = segmentsCount; i >= 0; i--) {
+            float x = centerX + halfCircleRadius * ((float)i / (float)segmentsCount * 2.0f - 1.0f);
+            glVertex2f(x, baseY);
+        }
+
+        glEnd();
+    }
+
+    //danau
+    float kolam[][2] = {
+        {498.438f, -46.485f},
+        {442.969f, -33.8594f},
+        {382.031f, -36.155f},
+        {310.938f, -40.746f},
+        {244.531f, -43.0416f},
+        {185.938f, -59.1105f},
+        {141.406f, -70.5882f},
+        {86.7188f, -84.3615f},
+        {25.7812f, -94.6915f},
+        {-17.9688f, -105.022f},
+        {-71.0938f, -124.534f},
+        {-125.781f, -139.455f},
+        {-167.969f, -148.637f},
+        {-160.938f, -184.218f},
+        {-149.219f, -199.139f},
+        {-107.031f, -226.686f},
+        {-55.4688f, -239.311f},
+        {0.0f, -266.858f},
+        {69.5312f, -285.222f},
+        {114.844f, -304.735f},
+        {157.031f, -312.769f},
+        {231.25f, -327.69f},
+        {296.094f, -339.168f},
+        {354.688f, -350.646f},
+        {411.719f, -362.123f},
+        {452.344f, -365.567f},
+        {489.062f, -370.158f},
+        {499.219f, -369.01f}
+    };
+
+    // titik pusat kira-kira (bisa kamu sesuaikan)
+    float centerX = 150.0f;
+    float centerY = -200.0f;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBegin(GL_TRIANGLE_FAN);
+
+    // titik pusat kolam - warna lebih cerah
+    glColor4f(0.2f* lightingFactor, 0.6f* lightingFactor, 0.9f* lightingFactor, 0.7f); // semi-transparan air
+    glVertex2f(centerX, centerY);
+
+    // keliling kolam - warna lebih gelap
+    glColor4f(0.1f* lightingFactor, 0.3f* lightingFactor, 0.6f* lightingFactor, 0.7f);
+    for (int i = 0; i < sizeof(kolam) / sizeof(kolam[0]); i++) {
+        glVertex2f(kolam[i][0], kolam[i][1]);
+    }
+
+    // kembali ke titik awal
+    glVertex2f(kolam[0][0], kolam[0][1]);
+    glEnd();
+
+    //bayangan angsa
+    glColor4f(0.2f, 0.2f, 0.2f, 0.5f);
+    glBegin(GL_POLYGON);
+    glVertex2i (391.406, -216.356);
+    glVertex2i (396.875, -224.39);
+    glVertex2i (407.031, -232.425);
+    glVertex2i (414.844, -234.72);
+    glVertex2i (425.781, -235.868);
+    glVertex2i (433.594, -231.277);
+    glVertex2i (434.375, -218.651);
+    glVertex2i (427.344, -204.878);
+    glEnd();
+
+    // angsa - dengan gradasi warna
+    glBegin(GL_POLYGON);
+    glColor3f(1.0f* lightingFactor, 1.0f* lightingFactor, 1.0f* lightingFactor); glVertex2i(384.375, -181.923);
+    glColor3f(0.95f* lightingFactor, 0.95f* lightingFactor, 0.95f* lightingFactor); glVertex2i(392.969, -186.514);
+    glColor3f(0.9f* lightingFactor, 0.9f* lightingFactor, 0.9f* lightingFactor); glVertex2i(403.125, -189.957);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(413.281, -194.548);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(421.094, -199.139);
+    glColor3f(0.75f* lightingFactor, 0.75f* lightingFactor, 0.75f* lightingFactor); glVertex2i(423.438, -209.469);
+    glColor3f(0.7f* lightingFactor, 0.7f* lightingFactor, 0.7f* lightingFactor); glVertex2i(419.531, -219.799);
+    glColor3f(0.75f* lightingFactor, 0.75f* lightingFactor, 0.75f* lightingFactor); glVertex2i(408.594, -215.208);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(397.656, -206.026);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(391.406, -196.844);
+    glEnd();
+
+    glBegin(GL_POLYGON);
+    glColor3f(0.95f* lightingFactor, 0.95f* lightingFactor, 0.95f* lightingFactor); glVertex2i(392.969, -195.696);
+    glColor3f(0.9f* lightingFactor, 0.9f* lightingFactor, 0.9f* lightingFactor); glVertex2i(378.906, -188.809);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(372.656, -178.479);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(372.656, -189.957);
+    glColor3f(0.75f* lightingFactor, 0.75f* lightingFactor, 0.75f* lightingFactor); glVertex2i(375, -196.844);
+    glColor3f(0.7f* lightingFactor, 0.7f* lightingFactor, 0.7f* lightingFactor); glVertex2i(379.688, -203.73);
+    glColor3f(0.65f* lightingFactor, 0.65f* lightingFactor, 0.65f* lightingFactor); glVertex2i(385.156, -210.617);
+    glColor3f(0.7f* lightingFactor, 0.7f* lightingFactor, 0.7f* lightingFactor); glVertex2i(389.062, -214.06);
+    glColor3f(0.75f* lightingFactor, 0.75f* lightingFactor, 0.75f* lightingFactor); glVertex2i(392.188, -217.504);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(397.656, -219.799);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(403.125, -222.095);
+    glColor3f(0.9f* lightingFactor, 0.9f* lightingFactor, 0.9f* lightingFactor); glVertex2i(411.719, -226.686);
+    glColor3f(0.95f* lightingFactor, 0.95f* lightingFactor, 0.95f* lightingFactor); glVertex2i(422.656, -228.981);
+    glColor3f(1.0f* lightingFactor, 1.0f* lightingFactor, 1.0f* lightingFactor); glVertex2i(429.688, -222.095);
+    glColor3f(0.95f* lightingFactor, 0.95f* lightingFactor, 0.95f* lightingFactor); glVertex2i(432.031, -212.912);
+    glColor3f(0.9f* lightingFactor, 0.9f* lightingFactor, 0.9f* lightingFactor); glVertex2i(432.031, -201.435);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(428.906, -197.991);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(422.656, -199.139);
+    glEnd();
+
+    glBegin(GL_POLYGON);
+    glColor3f(0.95f* lightingFactor, 0.95f* lightingFactor, 0.95f* lightingFactor); glVertex2i(431.25, -200.287);
+    glColor3f(0.9f* lightingFactor, 0.9f* lightingFactor, 0.9f* lightingFactor); glVertex2i(427.344, -189.957);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(422.656, -183.07);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(421.094, -175.036);
+    glColor3f(0.75f* lightingFactor, 0.75f* lightingFactor, 0.75f* lightingFactor); glVertex2i(414.844, -171.593);
+    glColor3f(0.7f* lightingFactor, 0.7f* lightingFactor, 0.7f* lightingFactor); glVertex2i(414.844, -176.184);
+    glColor3f(0.75f* lightingFactor, 0.75f* lightingFactor, 0.75f* lightingFactor); glVertex2i(416.406, -184.218);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(417.969, -188.809);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(421.094, -195.696);
+    glColor3f(0.9f* lightingFactor, 0.9f* lightingFactor, 0.9f* lightingFactor); glVertex2i(423.438, -200.287);
+    glEnd();
+
+    glBegin(GL_POLYGON);
+    glColor3f(0.9f* lightingFactor, 0.9f* lightingFactor, 0.9f* lightingFactor); glVertex2i(421.094, -175.036);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(421.094, -170.445);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(424.219, -165.854);
+    glColor3f(0.75f* lightingFactor, 0.75f* lightingFactor, 0.75f* lightingFactor); glVertex2i(427.344, -164.706);
+    glColor3f(0.7f* lightingFactor, 0.7f* lightingFactor, 0.7f* lightingFactor); glVertex2i(428.906, -160.115);
+    glColor3f(0.65f* lightingFactor, 0.65f* lightingFactor, 0.65f* lightingFactor); glVertex2i(426.562, -156.671);
+    glColor3f(0.6f* lightingFactor, 0.6f* lightingFactor, 0.6f* lightingFactor); glVertex2i(419.531, -156.671);
+    glColor3f(0.65f* lightingFactor, 0.65f* lightingFactor, 0.65f* lightingFactor); glVertex2i(417.969, -158.967);
+    glColor3f(0.7f* lightingFactor, 0.7f* lightingFactor, 0.7f* lightingFactor); glVertex2i(414.844, -162.41);
+    glColor3f(0.75f* lightingFactor, 0.75f* lightingFactor, 0.75f* lightingFactor); glVertex2i(413.281, -165.854);
+    glColor3f(0.8f* lightingFactor, 0.8f* lightingFactor, 0.8f* lightingFactor); glVertex2i(413.281, -170.445);
+    glColor3f(0.85f* lightingFactor, 0.85f* lightingFactor, 0.85f* lightingFactor); glVertex2i(414.062, -176.184);
+    glEnd();
+
+    glBegin(GL_TRIANGLES);
+    // gradasi oranye: merah → oranye → kuning-oranye
+    glColor3f(1.0f* lightingFactor, 0.4f* lightingFactor, 0.0f* lightingFactor); // merah-oranye
+    glVertex2i(425.781, -160.115);
+    glColor3f(1.0f* lightingFactor, 0.6f* lightingFactor, 0.2f* lightingFactor); // oranye cerah
+    glVertex2i(425.781, -164.706);
+    glColor3f(1.0f* lightingFactor, 0.5f* lightingFactor, 0.0f* lightingFactor); // oranye gelap
+    glVertex2i(431.25, -162.41);
+    glEnd();
+
+    glColor3f(0.0f, 0.0f, 0.0f); // mata angsa (hitam)
+    glBegin(GL_POINTS);
+    glVertex2i(422.656, -160.115);
+    glEnd();
+
+    //perahu
+    drawBoatWithShadow(87, -182);
+
+    // pagar
+    drawRectFence(-159.375, -164.706, 163.281, -277.188, 10, 10.0f, 47.0f);
+
+    glBegin(GL_POLYGON);
+
+    // kiri - coklat tua
+    glColor3f(0.25f* lightingFactor, 0.13f* lightingFactor, 0.05f* lightingFactor);  // warna kayu gelap
+    glVertex2i(-157.031, -176.184);
+    glVertex2i(-156.25, -176.184);
+    glVertex2i(-152.344, -178.479);
+    glVertex2i(-143.75, -183.07);
+    glVertex2i(-139.062, -185.366);
+    glVertex2i(-133.594, -187.661);
+    glVertex2i(-122.656, -192.253);
+    glVertex2i(-113.281, -196.844);
+
+    // tengah - coklat sedang gelap
+    glColor3f(0.35f* lightingFactor, 0.18f* lightingFactor, 0.07f* lightingFactor);
+    glVertex2i(-103.906, -200.287);
+    glVertex2i(-95.3125, -199.139);
+    glVertex2i(-89.0625, -202.583);
+    glVertex2i(-77.3438, -207.174);
+    glVertex2i(-67.9688, -210.617);
+    glVertex2i(-56.25, -217.504);
+    glVertex2i(-46.0938, -218.651);
+    glVertex2i(-33.5938, -225.538);
+    glVertex2i(-25, -230.129);
+    glVertex2i(-9.375, -237.016);
+    glVertex2i(5.46872, -239.311);
+
+    // kanan - coklat keemasan tapi tetap gelap
+    glColor3f(0.45f* lightingFactor, 0.25f* lightingFactor, 0.10f* lightingFactor);
+    glVertex2i(17.9688, -240.459);
+    glVertex2i(29.6875, -240.459);
+    glVertex2i(36.7188, -246.198);
+    glVertex2i(45.3125, -254.232);
+    glVertex2i(53.125, -254.232);
+    glVertex2i(67.9688, -263.415);
+    glVertex2i(89.0625, -270.301);
+    glVertex2i(107.812, -280.631);
+    glVertex2i(121.094, -284.075);
+    glVertex2i(129.688, -284.075);
+    glVertex2i(143.75, -286.37);
+    glVertex2i(143.75, -293.257);
+    glVertex2i(125.781, -293.257);
+    glVertex2i(110.156, -287.518);
+    glVertex2i(98.4375, -279.483);
+    glVertex2i(82.8125, -272.597);
+    glVertex2i(71.0938, -268.006);
+    glVertex2i(56.25, -259.971);
+    glVertex2i(39.0625, -258.824);
+    glVertex2i(30.4688, -251.937);
+    glVertex2i(17.1875, -243.902);
+    glVertex2i(8.59375, -239.311);
+    glVertex2i(-10.9375, -235.868);
+    glVertex2i(-21.875, -231.277);
+    glVertex2i(-45.3125, -220.947);
+    glVertex2i(-67.1875, -214.06);
+    glVertex2i(-82.0312, -209.469);
+    glVertex2i(-107.031, -201.435);
+    glVertex2i(-121.094, -193.4);
+    glVertex2i(-142.969, -188.809);
+    glVertex2i(-157.812, -180.775);
+
+    glEnd();
+
+
+    //rumah
+    glBegin(GL_POLYGON);
+    glColor3f(0.85f* lightingFactor, 0.35f* lightingFactor, 0.25f* lightingFactor); // merah bata terang (kena cahaya langsung)
+    glVertex2i(-159.375, -59.1105);
+    glVertex2i(-202.344, 13.1994);
+    glVertex2i(-362.5, 2.85306);
+    glColor3f(0.80f* lightingFactor, 0.30f* lightingFactor, 0.20f* lightingFactor); // transisi ke merah tua
+    glVertex2i(-416.406, -65.6205);
+    glVertex2i(-414.844, -161.484);
+    glColor3f(0.65f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); // merah tua gelap (bagian bawah, sedikit )
+    glVertex2i(-235.938, -240.459);
+    glVertex2i(-157.812, -211.765);
+    glColor3f(0.78f* lightingFactor, 0.32f* lightingFactor, 0.22f* lightingFactor); // kembali ke terang (kanan atas)
+    glVertex2i(-159.375, -59.1105);
+    glVertex2i(-236.719, -70.5882);
+    glEnd();
+
+    glBegin(GL_POLYGON);
+    glColor3f(0.85f* lightingFactor, 0.35f* lightingFactor, 0.25f* lightingFactor);
+    glVertex2i (-386.719, -29.1013);
+    glVertex2i (-226.562, -40.5135);
+    glColor3f(0.2f* lightingFactor, 0.1f* lightingFactor, 0.05f* lightingFactor);
+    glVertex2i (-212.5, -9.7561);
+    glVertex2i (-369.531, -10.9039);
+    glEnd();
+
+    glColor3f(0.85f* lightingFactor, 0.35f* lightingFactor, 0.25f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (-397.656, -45.0785);
+    glVertex2i (-236.719, -62.1968);
+    glColor3f(0.2f* lightingFactor, 0.1f* lightingFactor, 0.05f* lightingFactor);
+    glVertex2i (-228.125, -45.0785);
+    glVertex2i (-388.281, -32.525);
+    glEnd();
+
+    glColor3f(0.2f* lightingFactor, 0.1f* lightingFactor, 0.05f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (-413.281, -61.0556);
+    glVertex2i (-246.094, -80.4565);
+    glColor3f(0.85f* lightingFactor, 0.35f* lightingFactor, 0.25f* lightingFactor);
+    glVertex2i (-238.281, -66.7618);
+    glVertex2i (-401.562, -47.3609);
+    glEnd();
+
+    glColor3f(0.65f* lightingFactor, 0.50f* lightingFactor, 0.39f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i(-159.375, -61.0556);
+    glVertex2i(-157.812, -210.556);
+    glVertex2f(-235.938, -237.946);
+    glVertex2f(-244.531, -80.4565);
+    glEnd();
+
+    glColor3f(0.45f* lightingFactor, 0.35f* lightingFactor, 0.27f* lightingFactor); // coklat gelap (bayangan)
+    glBegin(GL_TRIANGLES);
+    glVertex2i(-244.531, -81.5977);
+    glVertex2i(-158.594, -63.3381);
+    glVertex2i(-202.344, 11.9829);
+    glEnd();
+
+
+    glBegin(GL_POLYGON);
+    glColor3f(0.80f* lightingFactor, 0.65f* lightingFactor, 0.50f* lightingFactor);
+    glVertex2i(-415.625, -67.903);
+    glColor3f(0.75f* lightingFactor, 0.60f* lightingFactor, 0.45f* lightingFactor);
+    glVertex2i(-245.313, -88.4451);
+    glColor3f(0.70f* lightingFactor, 0.55f* lightingFactor, 0.43f* lightingFactor);
+    glVertex2i(-243.75, -88.4451);
+    glColor3f(0.65f* lightingFactor, 0.50f* lightingFactor, 0.39f* lightingFactor);
+    glVertex2i(-235.938, -239.087);
+    glColor3f(0.80f* lightingFactor, 0.65f* lightingFactor, 0.50f* lightingFactor);
+    glVertex2i(-414.844, -161.484);
+    glEnd();
+
+    // Bagian utama pintu (persegi panjang)
+    glBegin(GL_POLYGON);
+    glColor3f(0.55f* lightingFactor, 0.27f* lightingFactor, 0.07f* lightingFactor); // coklat kayu gelap
+    glVertex2i(-212.5, -140.603);
+    glColor3f(0.60f* lightingFactor, 0.30f* lightingFactor, 0.08f* lightingFactor); // gradasi sedikit lebih terang
+    glVertex2i(-210.156, -226.686);
+    glColor3f(0.65f* lightingFactor, 0.35f* lightingFactor, 0.10f* lightingFactor); // bagian paling terang di sisi kanan
+    glVertex2i(-180.469, -216.356);
+    glColor3f(0.60f* lightingFactor, 0.30f* lightingFactor, 0.08f* lightingFactor);
+    glVertex2i(-185.938, -129.125);
+    glEnd();
+
+
+    // Lingkaran di pintu
+    float x1 = -210.938f;
+    float y1 = -140.941f;
+    float x2 = -184.375f;
+    float y2 = -134.094f;
+    // hitung pusat garis
+    float cx = (x1 + x2) / 2.0f;
+    float cy = (y1 + y2) / 2.0f;
+    // hitung radius = setengah jarak antar titik
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float radius = sqrt(dx*dx + dy*dy) / 2.0f;
+    // hitung sudut kemiringan garis basis (dalam radian)
+    float theta = atan2(dy, dx);
+    // gambar setengah lingkaran di sumbu lokal, putar ke posisi basis miring
+    glBegin(GL_TRIANGLE_FAN);
+        glColor3f(0.75f* lightingFactor, 0.40f* lightingFactor, 0.15f* lightingFactor); // warna tengah
+        glVertex2f(cx, cy); // pusat lingkaran (di tengah garis)
+        for (int angle = 0; angle <= 180; angle += 5) {
+            float rad = angle * 3.14159f / 180.0f;
+            // posisi titik setengah lingkaran sebelum rotasi
+            float x_local = radius * cos(rad);
+            float y_local = radius * sin(rad);
+            // rotasi titik sesuai sudut garis basis
+            float x_rot = x_local * cos(theta) - y_local * sin(theta);
+            float y_rot = x_local * sin(theta) + y_local * cos(theta);
+            // geser ke pusat lingkaran (cx, cy)
+            float x_final = cx + x_rot;
+            float y_final = cy + y_rot;
+            glColor3f(0.65f* lightingFactor, 0.30f* lightingFactor, 0.12f* lightingFactor); // warna pinggir
+            glVertex2f(x_final, y_final);
+        }
+    glEnd();
+
+
+
+    float birdPositions[3][2] = {
+        {-111.719f, 95.8393f},
+        {-73.4375f, 69.4405f},
+        {-38.2812f, 106.169f}
+    };
+
+    int wingSegments = 10;
+    float wingSpan = 20.0f;
+    float wingCurve = 6.0f;
+    float wingThickness = 3.0f;  // tebal sayap
+
+    for (int b = 0; b < 3; b++) {
+        float cx = birdPositions[b][0];
+        float cy = birdPositions[b][1];
+
+        // =================
+        // === Sayap kiri ===
+        // =================
+        glBegin(GL_TRIANGLE_STRIP);
+        for (int i = 0; i <= wingSegments; i++) {
+            float t = (float)i / wingSegments;
+            float x1 = cx - t * wingSpan;
+            float y1 = cy + sinf(t * 3.14159f) * wingCurve;
+            float x2 = x1;
+            float y2 = y1 - wingThickness;
+
+            float brightness = 1.0f - 0.3f * t;
+            glColor3f(brightness* lightingFactor, brightness* lightingFactor, brightness* lightingFactor);
+            glVertex2f(x1, y1);
+            glVertex2f(x2, y2);
+        }
+        glEnd();
+
+        // ==================
+        // === Sayap kanan ===
+        // ==================
+        glBegin(GL_TRIANGLE_STRIP);
+        for (int i = 0; i <= wingSegments; i++) {
+            float t = (float)i / wingSegments;
+            float x1 = cx + t * wingSpan;
+            float y1 = cy + sinf(t * 3.14159f) * wingCurve;
+            float x2 = x1;
+            float y2 = y1 - wingThickness;
+
+            float brightness = 1.0f - 0.3f * t;
+            glColor3f(brightness* lightingFactor, brightness* lightingFactor, brightness* lightingFactor);
+            glVertex2f(x1, y1);
+            glVertex2f(x2, y2);
+        }
+        glEnd();
+    }
+
+    //jalan
+    // jalan setapak dengan warna tanah alami
+    glBegin(GL_POLYGON);
+    // vertex dengan warna coklat gelap
+    glColor3f(0.35f* lightingFactor, 0.25f* lightingFactor, 0.15f* lightingFactor);
+    glVertex2i (-181.25, -218.651);
+    glVertex2i (-178.125, -231.277);
+    glVertex2i (-174.219, -238.164);
+
+    // vertex dengan warna coklat medium
+    glColor3f(0.5f* lightingFactor, 0.4f* lightingFactor, 0.3f* lightingFactor);
+    glVertex2i (-168.75, -246.198);
+    glVertex2i (-162.5, -255.38);
+    glVertex2i (-159.375, -262.267);
+    glVertex2i (-153.125, -274.892);
+
+    // vertex dengan warna coklat terang
+    glColor3f(0.65f* lightingFactor, 0.55f* lightingFactor, 0.45f* lightingFactor);
+    glVertex2i (-143.75, -281.779);
+    glVertex2i (-130.469, -287.518);
+    glVertex2i (-119.531, -292.109);
+    glVertex2i (-99.2188, -304.735);
+    glVertex2i (-82.0312, -310.473);
+    glVertex2i (-58.5938, -313.917);
+    glVertex2i (-39.8438, -313.917);
+
+    // kembali ke warna medium
+    glColor3f(0.5f* lightingFactor, 0.4f* lightingFactor, 0.3f* lightingFactor);
+    glVertex2i (-17.1875, -315.065);
+    glVertex2i (3.90625, -308.178);
+    glVertex2i (23.4375, -308.178);
+    glVertex2i (53.9062, -305.882);
+
+    // warna coklat gelap lagi
+    glColor3f(0.35f* lightingFactor, 0.25f* lightingFactor, 0.15f* lightingFactor);
+    glVertex2i (88.2812, -315.065);
+    glVertex2i (116.406, -328.838);
+    glVertex2i (147.656, -342.611);
+    glVertex2i (175, -352.941);
+    glVertex2i (211.719, -360.976);
+    glVertex2i (234.375, -364.419);
+    glVertex2i (256.25, -373.601);
+    glVertex2i (299.219, -400);
+    glVertex2i (103.125, -400);
+    glVertex2i (88.2812, -383.931);
+    glVertex2i (70.3125, -369.01);
+    glVertex2i (50.7812, -355.237);
+    glVertex2i (27.3438, -346.055);
+    glVertex2i (8.59375, -341.463);
+    glVertex2i (-20.3125, -340.316);
+    glVertex2i (-46.875, -336.872);
+    glVertex2i (-75.7812, -332.281);
+    glVertex2i (-102.344, -325.395);
+    glVertex2i (-128.906, -310.473);
+    glVertex2i (-154.688, -294.405);
+    glVertex2i (-170.312, -277.188);
+    glVertex2i (-183.594, -255.38);
+    glVertex2i (-195.312, -233.572);
+    glVertex2i (-203.125, -228.981);
+    glEnd();
+    glBegin(GL_POLYGON);
+    // vertex dengan warna coklat gelap
+    glColor3f(0.35f* lightingFactor, 0.25f* lightingFactor, 0.15f* lightingFactor);
+    glVertex2i (-181.25, -218.651);
+    glVertex2i (-178.125, -231.277);
+    glVertex2i (-174.219, -238.164);
+
+    // vertex dengan warna coklat medium
+    glColor3f(0.5f* lightingFactor, 0.4f* lightingFactor, 0.3f* lightingFactor);
+    glVertex2i (-168.75, -246.198);
+    glVertex2i (-162.5, -255.38);
+    glVertex2i (-159.375, -262.267);
+    glVertex2i (-153.125, -274.892);
+
+    // vertex dengan warna coklat terang
+    glColor3f(0.65f* lightingFactor, 0.55f* lightingFactor, 0.45f* lightingFactor);
+    glVertex2i (-143.75, -281.779);
+    glVertex2i (-130.469, -287.518);
+    glVertex2i (-119.531, -292.109);
+    glVertex2i (-99.2188, -304.735);
+    glVertex2i (-82.0312, -310.473);
+    glVertex2i (-58.5938, -313.917);
+    glVertex2i (-39.8438, -313.917);
+
+    // kembali ke warna medium
+    glColor3f(0.5f* lightingFactor, 0.4f* lightingFactor, 0.3f* lightingFactor);
+    glVertex2i (-17.1875, -315.065);
+    glVertex2i (3.90625, -308.178);
+    glVertex2i (23.4375, -308.178);
+    glVertex2i (53.9062, -305.882);
+
+    // warna coklat gelap lagi
+    glColor3f(0.35f* lightingFactor, 0.25f* lightingFactor, 0.15f* lightingFactor);
+    glVertex2i (88.2812, -315.065);
+    glVertex2i (116.406, -328.838);
+    glVertex2i (147.656, -342.611);
+    glVertex2i (175, -352.941);
+    glVertex2i (211.719, -360.976);
+    glVertex2i (234.375, -364.419);
+    glVertex2i (256.25, -373.601);
+    glVertex2i (299.219, -400);
+    glVertex2i (103.125, -400);
+    glVertex2i (88.2812, -383.931);
+    glVertex2i (70.3125, -369.01);
+    glVertex2i (50.7812, -355.237);
+    glVertex2i (27.3438, -346.055);
+    glVertex2i (8.59375, -341.463);
+    glVertex2i (-20.3125, -340.316);
+    glVertex2i (-46.875, -336.872);
+    glVertex2i (-75.7812, -332.281);
+    glVertex2i (-102.344, -325.395);
+    glVertex2i (-128.906, -310.473);
+    glVertex2i (-154.688, -294.405);
+    glVertex2i (-170.312, -277.188);
+    glVertex2i (-183.594, -255.38);
+    glVertex2i (-195.312, -233.572);
+    glVertex2i (-203.125, -228.981);
+    glEnd();
+
+    //rumput
+    glBegin(GL_POLYGON);
+    glColor3f(0.08f* lightingFactor, 0.25f* lightingFactor, 0.08f* lightingFactor);  // hijau tua sedang, nggak terlalu gelap
+    glVertex2i(142.969, -313.917);
+
+    glColor3f(0.15f* lightingFactor, 0.45f* lightingFactor, 0.15f* lightingFactor);  // hijau muda cerah
+    glVertex2i(311.719, -346.055);
+
+    glColor3f(0.07f* lightingFactor, 0.22f* lightingFactor, 0.07f* lightingFactor);  // hijau tua sedang
+    glVertex2i(400, -364.419);
+
+    glColor3f(0.16f* lightingFactor, 0.5f* lightingFactor, 0.16f* lightingFactor);   // hijau muda cerah
+    glVertex2i(441.406, -366.714);
+
+    glColor3f(0.09f* lightingFactor, 0.3f* lightingFactor, 0.09f* lightingFactor);   // hijau tua medium
+    glVertex2i(499.219, -374.749);
+
+    glColor3f(0.13f* lightingFactor, 0.4f* lightingFactor, 0.13f* lightingFactor);   // hijau muda cerah
+    glVertex2i(499.219, -387.374);
+
+    glColor3f(0.08f* lightingFactor, 0.24f* lightingFactor, 0.08f* lightingFactor);  // hijau tua sedang
+    glVertex2i(499.219, -400);
+
+    glColor3f(0.14f* lightingFactor, 0.48f* lightingFactor, 0.14f* lightingFactor);  // hijau muda cerah
+    glVertex2i(339.062, -400);
+    glEnd();
+
+    //rumput
+    glColor3f(0.0f* lightingFactor, 0.6f* lightingFactor, 0.0f* lightingFactor);
+    glBegin(GL_POLYGON);
+    glVertex2i (-177.344, -222.095);
+    glVertex2i (-169.531, -231.277);
+    glVertex2i (-164.062, -238.164);
+    glVertex2i (-157.031, -247.346);
+    glVertex2i (-149.219, -257.676);
+    glVertex2i (-135.156, -268.006);
+    glVertex2i (-118.75, -278.336);
+    glVertex2i (-107.812, -281.779);
+    glVertex2i (-89.8438, -286.37);
+    glVertex2i (-71.0938, -288.666);
+    glVertex2i (-48.4375, -287.518);
+    glVertex2i (-23.4375, -289.813);
+    glVertex2i (9.37497, -297.848);
+    glColor3f(0.0f* lightingFactor, 0.6f* lightingFactor, 0.0f* lightingFactor);
+    glVertex2i (39.0625, -304.735);
+    glVertex2i (51.5625, -301.291);
+    glVertex2i (69.5312, -309.326);
+    glVertex2i (92.1875, -315.065);
+    glVertex2i (133.594, -331.133);
+    glVertex2i (170.312, -344.907);
+    glVertex2i (206.25, -354.089);
+    glVertex2i (242.188, -367.862);
+    glVertex2i (274.219, -386.227);
+    glColor3f(0.0f* lightingFactor, 0.3f* lightingFactor, 0.0f* lightingFactor);
+    glVertex2i (289.062, -394.261);
+    glVertex2i (310.938, -387.374);
+    glVertex2i (285.156, -359.828);
+    glVertex2i (226.562, -339.168);
+    glVertex2i (160.938, -325.395);
+    glVertex2i (131.25, -321.951);
+    glColor3f(0.0f* lightingFactor, 0.6f* lightingFactor, 0.0f* lightingFactor);
+    glVertex2i (91.4062, -304.735);
+    glVertex2i (55.4688, -293.257);
+    glVertex2i (-2.34375, -277.188);
+    glVertex2i (-67.1875, -263.415);
+    glVertex2i (-121.875, -242.755);
+    glVertex2i (-155.469, -219.799);
+    glEnd();
+
+glBegin(GL_POLYGON);
+
+
+    glColor3f(0.2f* lightingFactor, 0.5f* lightingFactor, 0.1f* lightingFactor); // hijau kekuningan
+    glVertex2i(-177.344, -219.799);
+
+    glColor3f(0.0f* lightingFactor, 0.3f* lightingFactor, 0.0f* lightingFactor); // hijau tua
+    glVertex2i(-168.75, -233.572);
+
+    glColor3f(0.3f* lightingFactor, 0.6f* lightingFactor, 0.2f* lightingFactor); // hijau terang
+    glVertex2i(-160.156, -242.755);
+
+    glColor3f(0.5f* lightingFactor, 0.4f* lightingFactor, 0.1f* lightingFactor); // daun kekuningan
+    glVertex2i(-150.781, -255.38);
+
+    glColor3f(0.0f* lightingFactor, 0.5f* lightingFactor, 0.3f* lightingFactor); // hijau kebiruan
+    glVertex2i(-134.375, -270.301);
+
+    glColor3f(0.2f* lightingFactor, 0.6f* lightingFactor, 0.0f* lightingFactor); // hijau daun segar
+    glVertex2i(-114.844, -279.483);
+
+    glColor3f(0.3f* lightingFactor, 0.3f* lightingFactor, 0.1f* lightingFactor); // daun tua
+    glVertex2i(-96.875, -286.37);
+
+    // Mulai bagian bawah: warna seragam hijau alami
+    glColor3f(0.1f* lightingFactor, 0.4f* lightingFactor, 0.1f* lightingFactor); // hijau alami untuk semua titik bawah
+    glVertex2i(-76.5625, -289.813);
+    glVertex2i(-46.875, -290.961);
+    glVertex2i(-32.0312, -290.961);
+    glVertex2i(-13.2812, -294.405);
+    glVertex2i(5.46872, -296.7);
+    glVertex2i(27.3438, -300.143);
+    glVertex2i(-27.3438, -274.892);
+    glVertex2i(-66.4062, -257.676);
+    glVertex2i(-100.781, -239.311);
+    glVertex2i(-140.625, -223.242);
+    glColor3f(0.1f* lightingFactor, 0.4f* lightingFactor, 0.1f* lightingFactor); // hijau alami
+    glVertex2i(-158.594, -214.06);
+    glEnd();
+
+    //batang pohon
+    glBegin(GL_POLYGON);
+    // bawah batang, warna lebih gelap
+    glColor3f(0.4f* lightingFactor, 0.2f* lightingFactor, 0.1f* lightingFactor);
+    glVertex2i(313, -400);
+    glVertex2i(278, -232);
+    glVertex2i(255, -136);
+    // atas batang, lebih terang
+    glColor3f(0.6f* lightingFactor, 0.3f* lightingFactor, 0.15f* lightingFactor);
+    glVertex2i(255, -157);
+    glVertex2i(256, -179);
+    glVertex2i(261, -197);
+    glVertex2i(265, -212);
+    glVertex2i(266, -246);
+    glVertex2i(265, -256);
+    glVertex2i(267, -270);
+    glVertex2i(271, -289);
+    glVertex2i(274, -300);
+    glVertex2i(275, -316);
+    glVertex2i(275, -331);
+    glVertex2i(273, -339);
+    glVertex2i(274, -352);
+    glVertex2i(278, -363);
+    glVertex2i(282, -372);
+    glVertex2i(285, -400);
+    glEnd();
+
+    // batang pohon kiri
+    glBegin(GL_POLYGON);
+    // bagian bawah batang — warna gelap
+    glColor3f(0.40f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(289, -400);
+    glColor3f(0.40f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(292, -378);
+    glColor3f(0.45f* lightingFactor, 0.22f* lightingFactor, 0.11f* lightingFactor); glVertex2i(289, -362);
+    glColor3f(0.45f* lightingFactor, 0.22f* lightingFactor, 0.11f* lightingFactor); glVertex2i(285, -347);
+    glColor3f(0.50f* lightingFactor, 0.25f* lightingFactor, 0.12f* lightingFactor); glVertex2i(279, -310);
+    glColor3f(0.50f* lightingFactor, 0.25f* lightingFactor, 0.12f* lightingFactor); glVertex2i(280, -292);
+    glColor3f(0.55f* lightingFactor, 0.28f* lightingFactor, 0.13f* lightingFactor); glVertex2i(277, -262);
+    glColor3f(0.55f* lightingFactor, 0.28f* lightingFactor, 0.13f* lightingFactor); glVertex2i(273, -235);
+    glColor3f(0.58f* lightingFactor, 0.30f* lightingFactor, 0.14f* lightingFactor); glVertex2i(265, -211);
+    glColor3f(0.60f* lightingFactor, 0.32f* lightingFactor, 0.15f* lightingFactor); glVertex2i(260, -188);
+    glColor3f(0.63f* lightingFactor, 0.34f* lightingFactor, 0.16f* lightingFactor); glVertex2i(257, -167);
+    glColor3f(0.65f* lightingFactor, 0.36f* lightingFactor, 0.17f* lightingFactor); glVertex2i(254, -134);
+    glColor3f(0.65f* lightingFactor, 0.36f* lightingFactor, 0.17f* lightingFactor); glVertex2i(270, -125);
+    glColor3f(0.63f* lightingFactor, 0.34f* lightingFactor, 0.16f* lightingFactor); glVertex2i(274, -150);
+    glColor3f(0.60f* lightingFactor, 0.32f* lightingFactor, 0.15f* lightingFactor); glVertex2i(278, -172);
+    glColor3f(0.58f* lightingFactor, 0.30f* lightingFactor, 0.14f* lightingFactor); glVertex2i(283, -196);
+    glColor3f(0.55f* lightingFactor, 0.28f* lightingFactor, 0.13f* lightingFactor); glVertex2i(289, -224);
+    glColor3f(0.50f* lightingFactor, 0.25f* lightingFactor, 0.12f* lightingFactor); glVertex2i(297, -258);
+    glColor3f(0.47f* lightingFactor, 0.24f* lightingFactor, 0.11f* lightingFactor); glVertex2i(299, -282);
+    glColor3f(0.45f* lightingFactor, 0.22f* lightingFactor, 0.11f* lightingFactor); glVertex2i(303, -292);
+    glColor3f(0.43f* lightingFactor, 0.21f* lightingFactor, 0.10f* lightingFactor); glVertex2i(307, -312);
+    glColor3f(0.41f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(321, -333);
+    glColor3f(0.40f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(331, -358);
+    glColor3f(0.40f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(344, -371);
+    glColor3f(0.40f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(364, -381);
+    glColor3f(0.40f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(387, -391);
+    glColor3f(0.40f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(407, -400);
+    glEnd();
+
+    // batang pohon kanan
+    glBegin(GL_POLYGON);
+    glColor3f(0.40f* lightingFactor, 0.20f* lightingFactor, 0.10f* lightingFactor); glVertex2i(313, -400);
+    glColor3f(0.42f* lightingFactor, 0.21f* lightingFactor, 0.10f* lightingFactor); glVertex2i(278, -232);
+    glColor3f(0.45f* lightingFactor, 0.22f* lightingFactor, 0.11f* lightingFactor); glVertex2i(255, -136);
+    glColor3f(0.47f* lightingFactor, 0.23f* lightingFactor, 0.11f* lightingFactor); glVertex2i(255, -157);
+    glColor3f(0.50f* lightingFactor, 0.25f* lightingFactor, 0.12f* lightingFactor); glVertex2i(256, -179);
+    glColor3f(0.52f* lightingFactor, 0.26f* lightingFactor, 0.13f* lightingFactor); glVertex2i(261, -197);
+    glColor3f(0.54f* lightingFactor, 0.27f* lightingFactor, 0.13f* lightingFactor); glVertex2i(265, -212);
+    glColor3f(0.56f* lightingFactor, 0.28f* lightingFactor, 0.14f* lightingFactor); glVertex2i(266, -246);
+    glColor3f(0.58f* lightingFactor, 0.29f* lightingFactor, 0.14f* lightingFactor); glVertex2i(265, -256);
+    glColor3f(0.60f* lightingFactor, 0.30f* lightingFactor, 0.15f* lightingFactor); glVertex2i(267, -270);
+    glColor3f(0.62f* lightingFactor, 0.31f* lightingFactor, 0.15f* lightingFactor); glVertex2i(271, -289);
+    glColor3f(0.63f* lightingFactor, 0.32f* lightingFactor, 0.16f* lightingFactor); glVertex2i(274, -300);
+    glColor3f(0.65f* lightingFactor, 0.33f* lightingFactor, 0.16f* lightingFactor); glVertex2i(275, -316);
+    glColor3f(0.65f* lightingFactor, 0.34f* lightingFactor, 0.17f* lightingFactor); glVertex2i(275, -331);
+    glColor3f(0.64f* lightingFactor, 0.34f* lightingFactor, 0.17f* lightingFactor); glVertex2i(273, -339);
+    glColor3f(0.63f* lightingFactor, 0.33f* lightingFactor, 0.16f* lightingFactor); glVertex2i(274, -352);
+    glColor3f(0.62f* lightingFactor, 0.32f* lightingFactor, 0.16f* lightingFactor); glVertex2i(278, -363);
+    glColor3f(0.60f* lightingFactor, 0.31f* lightingFactor, 0.15f* lightingFactor); glVertex2i(282, -372);
+    glColor3f(0.58f* lightingFactor, 0.30f* lightingFactor, 0.14f* lightingFactor); glVertex2i(285, -377);
+    glEnd();
+
+
+    glBegin(GL_POLYGON);
+    // warna daun dari bawah (gelap) ke atas (terang)
+    glColor3f(0.0f* lightingFactor, 0.3f* lightingFactor, 0.0f* lightingFactor); glVertex2i(207, -123);
+    glColor3f(0.0f* lightingFactor, 0.3f* lightingFactor, 0.0f* lightingFactor); glVertex2i(209, -133);
+    glColor3f(0.0f* lightingFactor, 0.35f* lightingFactor, 0.0f* lightingFactor); glVertex2i(214, -144);
+    glColor3f(0.0f* lightingFactor, 0.4f* lightingFactor, 0.0f* lightingFactor); glVertex2i(225, -148);
+    glColor3f(0.0f* lightingFactor, 0.4f* lightingFactor, 0.0f* lightingFactor); glVertex2i(239, -148);
+    glColor3f(0.0f* lightingFactor, 0.42f* lightingFactor, 0.0f* lightingFactor); glVertex2i(251, -148);
+    glColor3f(0.0f* lightingFactor, 0.45f* lightingFactor, 0.0f* lightingFactor); glVertex2i(269, -145);
+    glColor3f(0.0f* lightingFactor, 0.48f* lightingFactor, 0.0f* lightingFactor); glVertex2i(283, -145);
+    glColor3f(0.0f* lightingFactor, 0.50f* lightingFactor, 0.0f* lightingFactor); glVertex2i(293, -145);
+    glColor3f(0.0f* lightingFactor, 0.55f* lightingFactor, 0.0f* lightingFactor); glVertex2i(317, -132);
+    glColor3f(0.0f* lightingFactor, 0.60f* lightingFactor, 0.0f* lightingFactor); glVertex2i(341, -111);
+    glColor3f(0.0f* lightingFactor, 0.65f* lightingFactor, 0.0f* lightingFactor); glVertex2i(350, -90);
+    glColor3f(0.0f* lightingFactor, 0.70f* lightingFactor, 0.0f* lightingFactor); glVertex2i(346, -59);
+    glColor3f(0.0f* lightingFactor, 0.75f* lightingFactor, 0.0f* lightingFactor); glVertex2i(341, -22);
+    glColor3f(0.0f* lightingFactor, 0.80f* lightingFactor, 0.0f* lightingFactor); glVertex2i(324, 5);
+    glColor3f(0.0f* lightingFactor, 0.85f* lightingFactor, 0.0f* lightingFactor); glVertex2i(295, 32);
+    glColor3f(0.0f* lightingFactor, 0.88f* lightingFactor, 0.0f* lightingFactor); glVertex2i(258, 47);
+    glColor3f(0.0f* lightingFactor, 0.85f* lightingFactor, 0.0f* lightingFactor); glVertex2i(228, 37);
+    glColor3f(0.0f* lightingFactor, 0.80f* lightingFactor, 0.0f* lightingFactor); glVertex2i(203, 25);
+    glColor3f(0.0f* lightingFactor, 0.75f* lightingFactor, 0.0f* lightingFactor); glVertex2i(178, -7);
+    glColor3f(0.0f* lightingFactor, 0.65f* lightingFactor, 0.0f* lightingFactor); glVertex2i(171, -51);
+    glColor3f(0.0f* lightingFactor, 0.60f* lightingFactor, 0.0f* lightingFactor); glVertex2i(175, -77);
+    glColor3f(0.0f* lightingFactor, 0.55f* lightingFactor, 0.0f* lightingFactor); glVertex2i(172, -106);
+    glColor3f(0.0f* lightingFactor, 0.50f* lightingFactor, 0.0f* lightingFactor); glVertex2i(193, -139);
+    glColor3f(0.0f* lightingFactor, 0.45f* lightingFactor, 0.0f* lightingFactor); glVertex2i(225, -157);
+    glColor3f(0.0f* lightingFactor, 0.40f* lightingFactor, 0.0f* lightingFactor); glVertex2i(246, -152);
+    glColor3f(0.0f* lightingFactor, 0.35f* lightingFactor, 0.0f* lightingFactor); glVertex2i(257, -140);
+    glColor3f(0.0f* lightingFactor, 0.38f* lightingFactor, 0.0f* lightingFactor); glVertex2i(275, -129);
+    glColor3f(0.0f* lightingFactor, 0.42f* lightingFactor, 0.0f* lightingFactor); glVertex2i(288, -120);
+    glColor3f(0.0f* lightingFactor, 0.46f* lightingFactor, 0.0f* lightingFactor); glVertex2i(298, -111);
+    glColor3f(0.0f* lightingFactor, 0.52f* lightingFactor, 0.0f* lightingFactor); glVertex2i(310, -88);
+    glEnd();
+
+    drawTree (-411.719, -191.105);
+    drawTree(-153.125, -219.799);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.0f* lightingFactor, 0.0f* lightingFactor, 0.0f* lightingFactor, 0.4f);  // Hitam dengan 40% opasitas
+    glBegin(GL_POLYGON);
+    glVertex2i (-155.469, -209.469);
+    glVertex2i (-157.031, -136.011);
+    glVertex2i (-153.906, -130.273);
+    glVertex2i (-139.844, -147.489);
+    glVertex2i (-147.656, -150.933);
+    glVertex2i (-133.594, -169.297);
+    glVertex2i (-142.969, -170.445);
+    glVertex2i (-128.906, -187.661);
+    glVertex2i (-147.656, -189.957);
+    glVertex2i (-148.438, -210.617);
+    glEnd();
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.0f* lightingFactor, 0.0f* lightingFactor, 0.0f* lightingFactor, 0.4f);  // Hitam dengan 40% opasitas
+    glBegin(GL_POLYGON);
+    glVertex2i (-153.906, -203.73);
+    glVertex2i (-153.906, -129.125);
+    glVertex2i (-167.969, -146.341);
+    glVertex2i (-157.812, -148.637);
+    glVertex2i (-172.656, -168.149);
+    glVertex2i (-163.281, -170.445);
+    glVertex2i (-177.344, -185.366);
+    glVertex2i (-158.594, -189.957);
+    glVertex2i (-157.812, -204.878);
+    glEnd();
+
+    // koordinat relatif mobil dari titik tengah
+    int carx = -401;
+    int cary = -276;
+    drawCarBody(carx, cary);
+    drawCarDetail(carx, cary);
+    drawCarWheels(carx, cary);
+
+    glFlush();
+}
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+    glutInitWindowPosition(100, 100);
+    glutInitWindowSize(1280, 800);
+    glutCreateWindow("672022028_Tugas2");
+    mulai();
+    glutDisplayFunc(myDisplay);
+    glutTimerFunc(timerInterval, updateWaktu, 0);
+    glutMainLoop();
+
+}
